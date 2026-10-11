@@ -1,21 +1,29 @@
 # Google Drive backups
 
-The app already creates local SQLite backups. Google Drive copies are uploaded only when `GOOGLE_DRIVE_FOLDER_ID` is configured. Cloud copies are encrypted by the app with AES-256-GCM before upload; the encryption key is not uploaded to Drive.
+Google Drive backups are encrypted by the app with AES-256-GCM before upload. The encryption key is never uploaded. Keep `BACKUP_ENCRYPTION_KEY` stable and store a separate secure copy; losing it makes encrypted Drive backups unrecoverable.
 
-## One-time setup
+## Local SQLite mode
 
-1. In Google Cloud Console, open the `secure-auth-system-backup` project, enable **Google Drive API**, and configure the OAuth consent screen. Add the Google account that owns the Drive folder as a test user if the app is in Testing mode.
-2. Create an OAuth client of type **Desktop app**. Keep the downloaded `client_secret_*.json` in this project root. The repository ignores this file; never commit or share it.
-3. In Google Drive, open the project backup folder. Copy the folder ID from its URL, which has the form `https://drive.google.com/drive/folders/FOLDER_ID`. Do not use the Google Cloud Console URL.
-4. From the project directory, run `npm.cmd run drive:configure`. Paste the ID from your Drive folder URL when prompted. The script configures the OAuth JSON and folder, generates a random 256-bit encryption key if needed, and saves it privately in `.env` without printing it. Keep a separate secure copy of `BACKUP_ENCRYPTION_KEY` (for example in a password manager); without it, cloud backups cannot be decrypted.
-5. Run `npm.cmd run drive:auth`. Open the URL it prints, sign in as the Google account that can access the target folder, and approve Drive access. The refresh token is saved locally under `secrets/`; it is not printed.
-6. Restart the app. It creates and uploads a backup at startup, then uploads on the configured schedule. The terminal reports successful uploads or explains cloud upload failures; local backups continue even when Drive is unavailable.
+When running on the computer without `DATABASE_URL`, the app uses SQLite at `DATABASE_PATH`, creates local snapshots under `backups/`, and uploads encrypted `.db.enc` copies when `GOOGLE_DRIVE_FOLDER_ID` and local OAuth files are configured. Local snapshots are retained according to `BACKUP_RETENTION_DAYS`.
 
-The app needs Drive access to the folder you specify. The current OAuth flow requests the Drive scope so it can upload into a folder you created beforehand and remove expired backups from that folder. Use this project only with a Google account you trust.
+Set up local Drive access with `npm.cmd run drive:configure` and `npm.cmd run drive:auth`. Keep the OAuth JSON and refresh token under the ignored files; never commit or share them. OAuth apps left in Google's external Testing mode can have refresh tokens that expire, so review Google's current OAuth requirements for unattended use.
 
-## Backup behavior and restore
+## Vercel/PostgreSQL mode
 
-- Local SQLite snapshots stay under `backups/` and are retained according to `BACKUP_RETENTION_DAYS`.
-- Google Drive snapshots are named `auth-db-<timestamp>.db.enc` and encrypted before upload. Expired app backups are deleted from the configured folder according to the same retention period.
-- Keep `BACKUP_ENCRYPTION_KEY` stable. Restore requires downloading the `.db.enc` file, decrypting its format (`SABK1` header, 12-byte IV, 16-byte authentication tag, ciphertext), and then replacing the SQLite database while the server is stopped. Do not overwrite the live database while the app is running.
-- OAuth applications left in Google's external **Testing** mode may have refresh tokens that expire after seven days. For unattended long-term operation, review the app's publishing/verification status and Google's current OAuth policies; reauthorize with `npm.cmd run drive:auth` if authorization expires.
+When Vercel has `DATABASE_URL`, the app uses PostgreSQL. Vercel's daily Cron invokes `/api/cron/backup`; it exports the application tables, encrypts the JSON snapshot with the same AES-256-GCM backup format, uploads it to Drive as `auth-db-<timestamp>.pg.json.enc`, and prunes old app backups according to `BACKUP_RETENTION_DAYS`.
+
+Configure these as private Vercel Production environment variables:
+
+- `GOOGLE_DRIVE_FOLDER_ID`: the ID of your existing Drive backup folder.
+- `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET`: from your OAuth Desktop client JSON.
+- `GOOGLE_DRIVE_REFRESH_TOKEN`: from the private local `secrets/google-drive-token.json` created by `npm.cmd run drive:auth`.
+- `BACKUP_ENCRYPTION_KEY`: the same stable 64-hex-character key used for local Drive backups, or a newly generated key copied securely to your password manager first.
+- `CRON_SECRET`: a separate long random value. Vercel uses it to authenticate the scheduled endpoint.
+
+Do not paste or commit these values. Use Google's OAuth configuration and a Drive folder accessible to the authorized account. Verify the Cron deployment and Drive upload in Vercel logs after production deployment.
+
+## Restore
+
+A local `.db.enc` backup is an encrypted SQLite snapshot; stop the local server before restoring it to the local database. A cloud `.pg.json.enc` backup is an encrypted PostgreSQL table export, not an SQLite file. Download it privately, set the original `BACKUP_ENCRYPTION_KEY` and a `DATABASE_URL` for a new empty PostgreSQL database in your local process, then run `npm.cmd run db:restore-postgres-backup -- <path-to-file>`. The restore command refuses to write into non-empty application tables. Keep `SESSION_SECRET` and `PASSWORD_PEPPER` unchanged when restoring existing users so authenticator decryption and password verification continue to work.
+
+The local SQLite database and Vercel PostgreSQL database are separate. Local offline snapshots do not automatically include changes made by the online app; the encrypted PostgreSQL Drive snapshot is the cloud recovery copy.

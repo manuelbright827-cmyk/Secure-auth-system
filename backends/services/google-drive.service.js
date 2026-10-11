@@ -15,6 +15,15 @@ function resolveProjectPath(value) {
 }
 
 async function loadClientCredentials({ fallbackFile } = {}) {
+    if (process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET) {
+        return {
+            client_id: process.env.GOOGLE_DRIVE_CLIENT_ID,
+            client_secret: process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+            auth_uri: process.env.GOOGLE_DRIVE_AUTH_URI,
+            token_uri: process.env.GOOGLE_DRIVE_TOKEN_URI
+        };
+    }
+
     const configuredPath = process.env.GOOGLE_DRIVE_CLIENT_SECRET_FILE;
     let clientPath;
 
@@ -56,6 +65,13 @@ async function loadClientCredentials({ fallbackFile } = {}) {
 }
 
 async function loadToken() {
+    if (process.env.GOOGLE_DRIVE_REFRESH_TOKEN) {
+        return {
+            token: { refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN },
+            tokenPath: null
+        };
+    }
+
     const tokenPath = resolveProjectPath(
         process.env.GOOGLE_DRIVE_TOKEN_FILE || 'secrets/google-drive-token.json'
     );
@@ -91,6 +107,11 @@ async function getAccessToken() {
         throw new Error(`Google Drive token refresh failed (HTTP ${response.status}). Reauthorize with npm run drive:auth.`);
     }
 
+    if (result.refresh_token && saved.tokenPath) {
+        saved.token.refresh_token = result.refresh_token;
+        await fs.writeFile(saved.tokenPath, JSON.stringify(saved.token, null, 2), { mode: 0o600 });
+    }
+
     cachedAccessToken = result.access_token;
     accessTokenExpiresAt = Date.now() + (result.expires_in || 3600) * 1000;
     return cachedAccessToken;
@@ -122,11 +143,10 @@ async function driveRequest(url, options = {}) {
     return response;
 }
 
-async function encryptBackup(filePath) {
+function encryptBackupBuffer(plaintext) {
     const key = getEncryptionKey();
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-    const plaintext = await fs.readFile(filePath);
     const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
     return Buffer.concat([
         Buffer.from('SABK1'),
@@ -134,6 +154,10 @@ async function encryptBackup(filePath) {
         cipher.getAuthTag(),
         ciphertext
     ]);
+}
+
+async function encryptBackup(filePath) {
+    return encryptBackupBuffer(await fs.readFile(filePath));
 }
 
 function multipartBody(metadata, encryptedBackup, boundary) {
@@ -147,13 +171,16 @@ function multipartBody(metadata, encryptedBackup, boundary) {
 }
 
 async function uploadBackup(filePath) {
+    return uploadBackupBuffer(await fs.readFile(filePath), `${path.basename(filePath)}.enc`);
+}
+
+async function uploadBackupBuffer(plaintext, name) {
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
     if (!folderId) {
         throw new Error('Set GOOGLE_DRIVE_FOLDER_ID to the ID of your Google Drive project backup folder.');
     }
 
-    const encryptedBackup = await encryptBackup(filePath);
-    const name = `${path.basename(filePath)}.enc`;
+    const encryptedBackup = encryptBackupBuffer(plaintext);
     const metadata = {
         name,
         mimeType: 'application/octet-stream',
@@ -188,7 +215,7 @@ async function pruneDriveBackups(folderId) {
     const cutoff = Date.now() - retentionMs;
 
     for (const file of result.files || []) {
-        if (file.name.startsWith(backupPrefix) && file.name.endsWith('.db.enc') &&
+        if (file.name.startsWith(backupPrefix) && file.name.endsWith('.enc') &&
             Date.parse(file.createdTime) < cutoff) {
             await driveRequest(`${driveApiBase}/files/${encodeURIComponent(file.id)}`, {
                 method: 'DELETE'
@@ -200,5 +227,6 @@ async function pruneDriveBackups(folderId) {
 
 module.exports = {
     loadClientCredentials,
-    uploadBackup
+    uploadBackup,
+    uploadBackupBuffer
 };

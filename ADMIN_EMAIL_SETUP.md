@@ -23,9 +23,9 @@ Keep `SMTP_PASS` private; do not paste it into chat or commit `.env`. For a Verc
 
 ## Hosting and offline backup notes
 
-The current app is a persistent Node/Express server using a local SQLite database, local files, an in-memory session store, and a 24-hour `setInterval` backup timer. Those are suitable for local operation but are not a production-ready Vercel deployment: Vercel functions are serverless, local files are not durable, and in-memory timers/sessions are not reliable across invocations. A Vercel deployment needs a persistent hosted database/session store and a scheduled backup mechanism. Keep a local copy of backups on your computer separately; Vercel cannot write a durable backup onto your computer while it is off or disconnected.
+The app now supports Vercel Node Functions with PostgreSQL-backed users, sessions, and rate limits. Vercel's daily Cron endpoint can create encrypted PostgreSQL snapshots in Google Drive when its private environment variables are configured. See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for deployment steps.
 
-The existing offline/local backup feature works when the app runs on your computer and writes SQLite snapshots under `backups/`. To retain offline backups after moving the app to a cloud host, separately download/sync encrypted backup files to your computer or use an automated local sync task.
+On your computer, leave `DATABASE_URL` unset to keep using local SQLite and the local backup scheduler. Local SQLite and hosted PostgreSQL are separate databases; local snapshots do not automatically include changes made online. A hosted PostgreSQL Drive snapshot is an encrypted JSON table export, not a SQLite file.
 
 The app serves its public frontend while explicitly blocking backend source, OAuth JSON files, backups, and secrets directories from static downloads.
 

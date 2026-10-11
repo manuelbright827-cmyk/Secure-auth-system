@@ -4,34 +4,35 @@ const { hashPassword } = require('./password.service');
 async function createUser(email, password, role = 'inputer') {
     const passwordHash = await hashPassword(password);
 
-    const statement = db.prepare(`
+    const result = await db.query(`
         INSERT INTO users (email, password_hash, role)
         VALUES (?, ?, ?)
-    `);
-
-    const result = statement.run(email, passwordHash, role);
+        RETURNING id
+    `, [email, passwordHash, role]);
 
     return {
-        id: result.lastInsertRowid,
+        id: result.rows[0].id,
         email,
         role
     };
 }
 
-function findUserByEmail(email) {
-    return db.prepare(`
+async function findUserByEmail(email) {
+    const result = await db.query(`
         SELECT *
         FROM users
         WHERE email = ?
-    `).get(email);
+    `, [email]);
+    return result.rows[0];
 }
 
-function findUserById(id) {
-    return db.prepare(`
+async function findUserById(id) {
+    const result = await db.query(`
         SELECT *
         FROM users
         WHERE id = ?
-    `).get(id);
+    `, [id]);
+    return result.rows[0];
 }
 
 module.exports = {

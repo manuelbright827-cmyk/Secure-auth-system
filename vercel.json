@@ -1,0 +1,9 @@
+{
+  "outputDirectory": "frontend",
+  "crons": [
+    {
+      "path": "/api/cron/backup",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

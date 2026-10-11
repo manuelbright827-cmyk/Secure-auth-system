@@ -44,7 +44,8 @@ function formatRole(role) {
 
 function formatDate(value) {
     if (!value) return '—';
-    const date = new Date(`${value.replace(' ', 'T')}Z`);
+    const normalized = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
+    const date = new Date(normalized);
     return Number.isNaN(date.getTime())
         ? value
         : new Intl.DateTimeFormat(undefined, {

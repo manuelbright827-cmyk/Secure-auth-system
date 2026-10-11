@@ -1,62 +1,25 @@
-const express = require('express');
 const path = require('path');
-const helmet = require('helmet');
-
 const projectRoot = path.resolve(__dirname, '..');
 
 require('dotenv').config({ path: path.resolve(projectRoot, '.env') });
 
-const sessionMiddleware = require('./config/session');
-require('./database/schema');
-const authRoutes = require('./routes/auth.routes');
+const db = require('./config/database');
+const { ensureSchema } = require('./database/schema');
 const { startScheduledBackups } = require('./services/backup.service');
-
-const app = express();
+const app = require('./app');
 const PORT = process.env.PORT || 3000;
-const APP_VERSION = 'admin-email-temp-password-2026-10-11';
 
-app.use(helmet());
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(sessionMiddleware);
-
-// Frontend
-app.use((req, res, next) => {
-    let requestedPath;
-    try {
-        requestedPath = decodeURIComponent(req.path).replace(/^\/+/, '');
-    } catch {
-        return res.sendStatus(400);
-    }
-
-    const normalizedPath = path.posix.normalize(`/${requestedPath}`).replace(/^\/+/, '');
-    const firstSegment = normalizedPath.split('/')[0].toLowerCase();
-    if (
-        ['backends', 'backups', 'secrets', 'node_modules', '.git'].includes(firstSegment) ||
-        /^client_secret[^/]*\.json$/i.test(normalizedPath) ||
-        normalizedPath.toLowerCase() === 'credentials.json'
-    ) {
-        return res.sendStatus(404);
-    }
-    next();
-});
-app.use(express.static(path.resolve(projectRoot, 'frontend')));
-
-// Authentication
-app.use('/api/auth', authRoutes);
-
-// Health check
-app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        version: APP_VERSION,
-        root: projectRoot
-    });
-});
-
-app.listen(PORT, () => {
+async function start() {
+    await ensureSchema();
+    app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    console.log(`App version: ${APP_VERSION}`);
     console.log(`Project root: ${projectRoot}`);
-    startScheduledBackups();
+        if (db.dialect === 'sqlite') startScheduledBackups();
+        else console.log('PostgreSQL is active; database backups are managed by the database provider.');
+    });
+}
+
+start().catch((error) => {
+    console.error('Could not start Secure Auth System:', error.message);
+    process.exitCode = 1;
 });

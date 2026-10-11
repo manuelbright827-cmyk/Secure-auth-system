@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { authenticateUser, findUserById } = require('../services/auth.service');
 const { createUser } = require('../services/user.service');
 const { hashPassword } = require('../services/password.service');
+const DatabaseRateLimitStore = require('../services/database-rate-limit-store');
 const {
     isConsoleDelivery,
     sendAdminTemporaryPasswordEmail,
@@ -19,19 +20,26 @@ const {
 } = require('../services/two-factor.service');
 
 const router = express.Router();
+const rateLimitHandler = (req, res) => res.status(429).json({
+    message: 'Too many requests. Please wait before trying again.'
+});
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 10,
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    store: new DatabaseRateLimitStore('login'),
+    handler: rateLimitHandler
 });
 
 const verificationLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 10,
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    store: new DatabaseRateLimitStore('verification'),
+    handler: rateLimitHandler
 });
 
 const adminCreationLimiter = rateLimit({
@@ -39,6 +47,7 @@ const adminCreationLimiter = rateLimit({
     limit: 5,
     standardHeaders: true,
     legacyHeaders: false,
+    store: new DatabaseRateLimitStore('admin-creation'),
     skipFailedRequests: true,
     handler: (req, res) => res.status(429).json({
         message: 'Too many administrator accounts were created from this address. Try again after the one-hour limit resets.'
@@ -49,23 +58,27 @@ const passwordSetupLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 5,
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    store: new DatabaseRateLimitStore('password-setup'),
+    handler: rateLimitHandler
 });
 
 const passwordResetLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 5,
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    store: new DatabaseRateLimitStore('password-reset'),
+    handler: rateLimitHandler
 });
 
-function getAuthenticatedAccount(req, res) {
+async function getAuthenticatedAccount(req, res) {
     if (!req.session.user) {
         res.status(401).json({ message: 'Authentication required' });
         return null;
     }
 
-    const user = findUserById(req.session.user.id);
+    const user = await findUserById(req.session.user.id);
     if (!user || !user.is_active) {
         res.status(401).json({ message: 'Account not available. Please sign in again.' });
         return null;
@@ -74,8 +87,8 @@ function getAuthenticatedAccount(req, res) {
     return user;
 }
 
-function getAdminAccount(req, res) {
-    const user = getAuthenticatedAccount(req, res);
+async function getAdminAccount(req, res) {
+    const user = await getAuthenticatedAccount(req, res);
     if (!user) return null;
 
     if (user.role !== 'administrator') {
@@ -86,14 +99,14 @@ function getAdminAccount(req, res) {
     return user;
 }
 
-function getPendingAccount(req, res) {
+async function getPendingAccount(req, res) {
     const pending = req.session.pendingTwoFactor;
     if (!pending) {
         res.status(401).json({ message: 'Please sign in with your password first' });
         return null;
     }
 
-    const user = findUserById(pending.id);
+    const user = await findUserById(pending.id);
     if (!user || !user.is_active) {
         delete req.session.pendingTwoFactor;
         delete req.session.pendingTwoFactorSecret;
@@ -160,8 +173,8 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 });
 
-router.get('/2fa/status', (req, res) => {
-    const user = getPendingAccount(req, res);
+router.get('/2fa/status', async (req, res) => {
+    const user = await getPendingAccount(req, res);
     if (!user) return;
 
     res.json({
@@ -169,8 +182,8 @@ router.get('/2fa/status', (req, res) => {
     });
 });
 
-router.post('/2fa/setup', (req, res) => {
-    const user = getPendingAccount(req, res);
+router.post('/2fa/setup', async (req, res) => {
+    const user = await getPendingAccount(req, res);
     if (!user) return;
 
     if (user.two_factor_enabled && user.two_factor_secret) {
@@ -191,7 +204,7 @@ router.post('/2fa/setup', (req, res) => {
 });
 
 router.post('/2fa/verify-setup', verificationLimiter, async (req, res) => {
-    const user = getPendingAccount(req, res);
+    const user = await getPendingAccount(req, res);
     if (!user) return;
 
     const { code } = req.body;
@@ -207,15 +220,15 @@ router.post('/2fa/verify-setup', verificationLimiter, async (req, res) => {
         return res.status(401).json({ message: 'Code did not match. Check your authenticator app and try again.' });
     }
 
-    const result = db.prepare(`
+    const result = await db.query(`
         UPDATE users
-        SET two_factor_secret = ?, two_factor_enabled = 1,
+        SET two_factor_secret = ?, two_factor_enabled = TRUE,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND is_active = 1 AND two_factor_enabled = 0
-    `).run(encryptSecret(secret), user.id);
+        WHERE id = ? AND is_active = TRUE AND two_factor_enabled = FALSE
+    `, [encryptSecret(secret), user.id]);
 
-    if (result.changes !== 1) {
-        const currentUser = findUserById(user.id);
+    if (result.rowCount !== 1) {
+        const currentUser = await findUserById(user.id);
         if (!currentUser || !currentUser.two_factor_enabled || !currentUser.two_factor_secret) {
             return res.status(409).json({ message: 'Could not link the authenticator. Please restart setup.' });
         }
@@ -226,7 +239,7 @@ router.post('/2fa/verify-setup', verificationLimiter, async (req, res) => {
 });
 
 router.post('/2fa/verify', verificationLimiter, async (req, res) => {
-    const user = getPendingAccount(req, res);
+    const user = await getPendingAccount(req, res);
     if (!user) return;
 
     if (!user.two_factor_enabled || !user.two_factor_secret) {
@@ -254,12 +267,12 @@ router.post('/2fa/verify', verificationLimiter, async (req, res) => {
     return res.json({ message: 'Sign-in successful' });
 });
 
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
     if (!req.session.user) {
         return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const user = findUserById(req.session.user.id);
+    const user = await findUserById(req.session.user.id);
     if (!user || !user.is_active) {
         req.session.destroy(() => {});
         return res.status(401).json({ message: 'Account not available. Please sign in again.' });
@@ -277,15 +290,16 @@ router.get('/me', (req, res) => {
     });
 });
 
-router.get('/admin/status', (req, res) => {
-    const user = getAuthenticatedAccount(req, res);
+router.get('/admin/status', async (req, res) => {
+    const user = await getAuthenticatedAccount(req, res);
     if (!user) return;
 
-    const adminCount = db.prepare(`
+    const adminCountResult = await db.query(`
         SELECT COUNT(*) AS count
         FROM users
-        WHERE role IN ('admin', 'administrator') AND is_active = 1
-    `).get().count;
+        WHERE role IN ('admin', 'administrator') AND is_active = TRUE
+    `);
+    const adminCount = Number(adminCountResult.rows[0].count);
 
     return res.json({
         isAdmin: user.role === 'administrator',
@@ -293,22 +307,26 @@ router.get('/admin/status', (req, res) => {
     });
 });
 
-router.post('/admin/bootstrap', (req, res) => {
-    const user = getAuthenticatedAccount(req, res);
+router.post('/admin/bootstrap', async (req, res) => {
+    const user = await getAuthenticatedAccount(req, res);
     if (!user) return;
 
-    const claimFirstAdmin = db.transaction((userId) => db.prepare(`
-        UPDATE users
-        SET role = 'administrator', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND is_active = 1
-          AND NOT EXISTS (
-              SELECT 1 FROM users
-              WHERE role IN ('admin', 'administrator') AND is_active = 1
-          )
-    `).run(userId));
+    const claimFirstAdmin = db.transaction(async (userId) => {
+        if (db.dialect === 'postgres') await db.query('LOCK TABLE users IN EXCLUSIVE MODE');
+        const result = await db.query(`
+            UPDATE users
+            SET role = 'administrator', updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND is_active = TRUE
+              AND NOT EXISTS (
+                  SELECT 1 FROM users
+                  WHERE role IN ('admin', 'administrator') AND is_active = TRUE
+              )
+        `, [userId]);
+        return result.rowCount;
+    });
 
-    const result = claimFirstAdmin(user.id);
-    if (result.changes !== 1) {
+    const changes = await claimFirstAdmin(user.id);
+    if (changes !== 1) {
         return res.status(409).json({
             message: 'The initial administrator has already been set up. Ask an administrator to add your account.'
         });
@@ -318,14 +336,15 @@ router.post('/admin/bootstrap', (req, res) => {
     return res.json({ message: 'Your account is now the first administrator.' });
 });
 
-router.get('/admin/users', (req, res) => {
-    if (!getAdminAccount(req, res)) return;
+router.get('/admin/users', async (req, res) => {
+    if (!await getAdminAccount(req, res)) return;
 
-    const users = db.prepare(`
+    const result = await db.query(`
         SELECT id, email, role, is_active, two_factor_enabled, created_at
         FROM users
         ORDER BY created_at ASC, id ASC
-    `).all().map((user) => ({
+    `);
+    const users = result.rows.map((user) => ({
         id: user.id,
         email: user.email,
         role: user.role,
@@ -338,7 +357,7 @@ router.get('/admin/users', (req, res) => {
 });
 
 router.post('/admin/users', adminCreationLimiter, async (req, res) => {
-    if (!getAdminAccount(req, res)) return;
+    if (!await getAdminAccount(req, res)) return;
 
     const email = typeof req.body.email === 'string'
         ? req.body.email.trim().toLowerCase()
@@ -353,10 +372,10 @@ router.post('/admin/users', adminCreationLimiter, async (req, res) => {
         newAdmin = await createUser(email, temporaryPassword, 'admin');
         await sendAdminTemporaryPasswordEmail(email, temporaryPassword);
 
-        db.prepare(`
+        await db.query(`
             INSERT INTO audit_logs (user_id, action, ip_address, user_agent)
             VALUES (?, ?, ?, ?)
-        `).run(req.session.user.id, `admin_account_created:${newAdmin.id}`, req.ip || null, req.get('user-agent') || null);
+        `, [req.session.user.id, `admin_account_created:${newAdmin.id}`, req.ip || null, req.get('user-agent') || null]);
 
         return res.status(201).json({
             message: isConsoleDelivery()
@@ -366,9 +385,9 @@ router.post('/admin/users', adminCreationLimiter, async (req, res) => {
         });
     } catch (error) {
         if (newAdmin) {
-            db.prepare('DELETE FROM users WHERE id = ? AND role = \'admin\'').run(newAdmin.id);
+            await db.query('DELETE FROM users WHERE id = ? AND role = \'admin\'', [newAdmin.id]);
         }
-        if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.code === '23505') {
             return res.status(409).json({ message: 'An account with that email already exists.' });
         }
         console.error('Administrator creation error:', error.message);
@@ -376,8 +395,8 @@ router.post('/admin/users', adminCreationLimiter, async (req, res) => {
     }
 });
 
-router.delete('/admin/users/:id', (req, res) => {
-    const admin = getAdminAccount(req, res);
+router.delete('/admin/users/:id', async (req, res) => {
+    const admin = await getAdminAccount(req, res);
     if (!admin) return;
 
     const userId = Number(req.params.id);
@@ -388,24 +407,25 @@ router.delete('/admin/users/:id', (req, res) => {
         return res.status(403).json({ message: 'You cannot delete your own signed-in account.' });
     }
 
-    const removeAdmin = db.transaction(() => {
-        const target = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(userId);
+    const removeAdmin = db.transaction(async () => {
+        const targetResult = await db.query('SELECT id, email, role FROM users WHERE id = ?', [userId]);
+        const target = targetResult.rows[0];
         if (!target) return { status: 404, message: 'Administrator account not found.' };
         if (target.role !== 'admin') {
             return { status: 403, message: 'The primary administrator account cannot be deleted here.' };
         }
 
-        db.prepare('DELETE FROM users WHERE id = ? AND role = \'admin\'').run(userId);
-        db.prepare(`
+        await db.query('DELETE FROM users WHERE id = ? AND role = \'admin\'', [userId]);
+        await db.query(`
             INSERT INTO audit_logs (user_id, action, ip_address, user_agent)
             VALUES (?, ?, ?, ?)
-        `).run(admin.id, `admin_account_deleted:${userId}`, req.ip || null, req.get('user-agent') || null);
+        `, [admin.id, `admin_account_deleted:${userId}`, req.ip || null, req.get('user-agent') || null]);
 
         return { status: 200, message: 'Administrator account deleted.', email: target.email };
     });
 
     try {
-        const result = removeAdmin();
+        const result = await removeAdmin();
         if (result.status !== 200) {
             return res.status(result.status).json({ message: result.message });
         }
@@ -427,36 +447,33 @@ router.post('/password/setup', passwordSetupLimiter, async (req, res) => {
     }
 
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const existing = db.prepare(`
+    const existing = await db.query(`
         SELECT user_id FROM password_setup_tokens
         WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?
-    `).get(tokenHash, Date.now());
-    if (!existing) {
+    `, [tokenHash, Date.now()]);
+    if (!existing.rows[0]) {
         return res.status(400).json({ message: 'This password setup link is invalid or expired.' });
     }
 
     try {
         const passwordHash = await hashPassword(password);
-        const completeSetup = db.transaction(() => {
-            const current = db.prepare(`
-                SELECT user_id FROM password_setup_tokens
+        const completeSetup = db.transaction(async () => {
+            const currentResult = await db.query(`
+                UPDATE password_setup_tokens SET used_at = ?
                 WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?
-            `).get(tokenHash, Date.now());
+                RETURNING user_id
+            `, [Date.now(), tokenHash, Date.now()]);
+            const current = currentResult.rows[0];
             if (!current) return false;
 
-            const changedUser = db.prepare(`
+            const changedUser = await db.query(`
                 UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND is_active = 1
-            `).run(passwordHash, current.user_id);
-            if (changedUser.changes !== 1) return false;
-            const consumed = db.prepare(`
-                UPDATE password_setup_tokens SET used_at = ?
-                WHERE token_hash = ? AND used_at IS NULL
-            `).run(Date.now(), tokenHash);
-            return consumed.changes === 1;
+                WHERE id = ? AND is_active = TRUE
+            `, [passwordHash, current.user_id]);
+            return changedUser.rowCount === 1;
         });
 
-        if (!completeSetup()) {
+        if (!await completeSetup()) {
             return res.status(400).json({ message: 'This password setup link is invalid or expired.' });
         }
         return res.json({ message: 'Password set successfully. You can now sign in and set up your authenticator.' });
@@ -474,7 +491,7 @@ router.post('/password/reset/request', passwordResetLimiter, async (req, res) =>
         return res.status(400).json({ message: 'Enter a valid email address.' });
     }
 
-    const user = findUserByEmail(email);
+    const user = await findUserByEmail(email);
     if (!user || !user.is_active) {
         return res.json({ message: 'If that active account exists, a reset code has been sent.' });
     }
@@ -482,12 +499,12 @@ router.post('/password/reset/request', passwordResetLimiter, async (req, res) =>
     try {
         const code = String(crypto.randomInt(100000, 1000000));
         const codeHash = crypto.createHash('sha256').update(`${email}:${code}`).digest('hex');
-        db.transaction(() => {
-            db.prepare('DELETE FROM password_reset_codes WHERE user_id = ?').run(user.id);
-            db.prepare(`
+        await db.transaction(async () => {
+            await db.query('DELETE FROM password_reset_codes WHERE user_id = ?', [user.id]);
+            await db.query(`
                 INSERT INTO password_reset_codes (code_hash, user_id, expires_at)
                 VALUES (?, ?, ?)
-            `).run(codeHash, user.id, Date.now() + 15 * 60 * 1000);
+            `, [codeHash, user.id, Date.now() + 15 * 60 * 1000]);
         })();
 
         await sendPasswordResetCode(email, code);
@@ -518,7 +535,7 @@ router.post('/password/reset/confirm', passwordResetLimiter, async (req, res) =>
         return res.status(400).json({ message: 'Choose a password between 12 and 256 characters.' });
     }
 
-    const user = findUserByEmail(email);
+    const user = await findUserByEmail(email);
     if (!user || !user.is_active) {
         return res.status(400).json({ message: 'The reset code is invalid or expired.' });
     }
@@ -526,27 +543,22 @@ router.post('/password/reset/confirm', passwordResetLimiter, async (req, res) =>
     const codeHash = crypto.createHash('sha256').update(`${email}:${code}`).digest('hex');
     try {
         const passwordHash = await hashPassword(password);
-        const completeReset = db.transaction(() => {
-            const existing = db.prepare(`
-                SELECT user_id FROM password_reset_codes
-                WHERE code_hash = ? AND user_id = ? AND used_at IS NULL AND expires_at > ?
-            `).get(codeHash, user.id, Date.now());
-            if (!existing) return false;
-
-            const changedUser = db.prepare(`
-                UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND is_active = 1
-            `).run(passwordHash, user.id);
-            if (changedUser.changes !== 1) return false;
-
-            db.prepare(`
+        const completeReset = db.transaction(async () => {
+            const existing = await db.query(`
                 UPDATE password_reset_codes SET used_at = ?
-                WHERE code_hash = ? AND used_at IS NULL
-            `).run(Date.now(), codeHash);
-            return true;
+                WHERE code_hash = ? AND user_id = ? AND used_at IS NULL AND expires_at > ?
+                RETURNING user_id
+            `, [Date.now(), codeHash, user.id, Date.now()]);
+            if (!existing.rows[0]) return false;
+
+            const changedUser = await db.query(`
+                UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND is_active = TRUE
+            `, [passwordHash, user.id]);
+            return changedUser.rowCount === 1;
         });
 
-        if (!completeReset()) {
+        if (!await completeReset()) {
             return res.status(400).json({ message: 'The reset code is invalid or expired.' });
         }
 
