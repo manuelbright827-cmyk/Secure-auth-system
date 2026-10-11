@@ -2,11 +2,11 @@
   "name": "secure-auth-system",
   "version": "1.0.0",
   "description": "",
-  "main": "script.js",
+  "main": "backends/server.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "drive:configure": "node backend/scripts/configure-google-drive.js",
-    "drive:auth": "node backend/scripts/google-drive-auth.js",
+    "start": "node backends/server.js",
+    "drive:configure": "node backends/scripts/configure-google-drive.js",
+    "drive:auth": "node backends/scripts/google-drive-auth.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

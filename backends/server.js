@@ -2,7 +2,9 @@ const express = require('express');
 const path = require('path');
 const helmet = require('helmet');
 
-require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+const projectRoot = path.resolve(__dirname, '..');
+
+require('dotenv').config({ path: path.resolve(projectRoot, '.env') });
 
 const sessionMiddleware = require('./config/session');
 require('./database/schema');
@@ -30,7 +32,7 @@ app.use((req, res, next) => {
     const normalizedPath = path.posix.normalize(`/${requestedPath}`).replace(/^\/+/, '');
     const firstSegment = normalizedPath.split('/')[0].toLowerCase();
     if (
-        ['backend', 'backups', 'secrets', 'node_modules', '.git'].includes(firstSegment) ||
+        ['backends', 'backups', 'secrets', 'node_modules', '.git'].includes(firstSegment) ||
         /^client_secret[^/]*\.json$/i.test(normalizedPath) ||
         normalizedPath.toLowerCase() === 'credentials.json'
     ) {
@@ -38,7 +40,7 @@ app.use((req, res, next) => {
     }
     next();
 });
-app.use(express.static(path.resolve(__dirname, '..')));
+app.use(express.static(path.resolve(projectRoot, 'frontend')));
 
 // Authentication
 app.use('/api/auth', authRoutes);
@@ -48,13 +50,13 @@ app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
         version: APP_VERSION,
-        root: path.resolve(__dirname, '..')
+        root: projectRoot
     });
 });
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`App version: ${APP_VERSION}`);
-    console.log(`Project root: ${path.resolve(__dirname, '..')}`);
+    console.log(`Project root: ${projectRoot}`);
     startScheduledBackups();
 });
