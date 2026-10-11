@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Two-Factor Authentication</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <main class="login-container">
+
+        <section class="login-card">
+
+            <div class="logo">
+                <span>🔐</span>
+            </div>
+
+            <h1>Two-Factor Authentication</h1>
+
+            <p class="subtitle" id="twoFactorSubtitle">
+                Complete authenticator setup or enter your verification code.
+            </p>
+            <p id="stageMessage" class="message" aria-live="polite"></p>
+
+            <section id="setupPanel" hidden>
+                <p class="setup-instructions">
+                    In your authenticator app, add an account manually using the key below.
+                    Choose time-based codes (TOTP), then enter the 6-digit code shown by the app.
+                </p>
+
+                <div class="authenticator-key">
+                    <span>Account key</span>
+                    <code id="authenticatorSecret"></code>
+                    <button type="button" id="copySecret" class="secondary-button">Copy key</button>
+                </div>
+
+                <form id="setupForm">
+                    <div class="form-group">
+                        <label for="setupCode">6-digit code</label>
+                        <input type="text" id="setupCode" inputmode="numeric"
+                            autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}"
+                            placeholder="000000" required>
+                    </div>
+                    <button type="submit" class="login-button">Link Authenticator</button>
+                    <p id="setupMessage" class="message" aria-live="polite"></p>
+                </form>
+            </section>
+
+            <form id="twoFactorForm" hidden>
+
+                <div class="form-group">
+                    <label for="verificationCode">
+                        Verification Code
+                    </label>
+
+                    <input
+                        type="text"
+                        id="verificationCode"
+                        name="verificationCode"
+                        placeholder="000000"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                        maxlength="6"
+                        pattern="[0-9]{6}"
+                        required
+                    >
+                </div>
+
+                <button type="submit" class="login-button">
+                    Verify Code
+                </button>
+
+                <p id="twoFactorMessage" class="message" aria-live="polite"></p>
+
+            </form>
+
+            <div class="security-notice">
+                <span>🛡️</span>
+                <p>
+                    Two-factor authentication helps protect your account
+                    even if your password is compromised.
+                </p>
+            </div>
+
+            <div class="back-link">
+                <a href="index.html">
+                    ← Back to Login
+                </a>
+            </div>
+
+        </section>
+
+    </main>
+
+    <script src="script.js"></script>
+
+</body>
+</html>

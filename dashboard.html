@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f5f7fc">
+    <title>Account overview | Secure Auth System</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="dashboard.js?v=admin-email-temp-password-1" defer></script>
+</head>
+<body class="dashboard-page">
+    <header class="dashboard-header">
+        <a class="brand" href="dashboard.html" aria-label="Secure Auth System home">
+            <span class="brand-mark" aria-hidden="true">S</span>
+            <span>Secure<span class="brand-light">Auth</span></span>
+        </a>
+        <div class="header-actions">
+            <span class="session-indicator"><span class="status-dot"></span> Secure session</span>
+            <button id="logoutButton" class="logout-button" type="button">Sign out</button>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <section class="welcome-row">
+            <div>
+                <p class="eyebrow">ACCOUNT CENTER</p>
+                <h1>Your account overview</h1>
+                <p class="welcome-copy">Manage your identity and keep track of your account security.</p>
+            </div>
+            <div class="welcome-avatar" id="welcomeAvatar" aria-hidden="true">–</div>
+        </section>
+
+        <nav class="dashboard-tabs" aria-label="Account sections">
+            <a class="dashboard-tab active" href="#overview" aria-current="page">Overview</a>
+            <a class="dashboard-tab" href="#profile">Profile</a>
+            <a class="dashboard-tab" href="#security">Login security</a>
+            <a class="dashboard-tab" href="#settings">Settings</a>
+            <a id="adminTab" class="dashboard-tab" href="#administration" hidden>Administration</a>
+        </nav>
+
+        <p id="dashboardMessage" class="dashboard-message" role="status">Loading your account…</p>
+
+        <section id="overview" class="overview-grid" hidden>
+            <article class="panel identity-panel" id="profile">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">YOUR IDENTITY</p>
+                        <h2>Account profile</h2>
+                    </div>
+                    <span class="icon-tile identity-icon" aria-hidden="true">◎</span>
+                </div>
+                <div class="profile-summary">
+                    <div class="profile-avatar" id="profileAvatar" aria-hidden="true">–</div>
+                    <div class="profile-primary">
+                        <strong id="profileEmail">Loading…</strong>
+                        <span id="profileRole">Account</span>
+                    </div>
+                </div>
+                <dl class="detail-list">
+                    <div><dt>Email address</dt><dd id="detailEmail">—</dd></div>
+                    <div><dt>Account type</dt><dd id="detailRole">—</dd></div>
+                    <div><dt>Member since</dt><dd id="detailCreated">—</dd></div>
+                    <div><dt>Account status</dt><dd><span class="inline-status"><span class="status-dot"></span> Active</span></dd></div>
+                </dl>
+            </article>
+
+            <article class="panel security-panel" id="security">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">ACCOUNT PROTECTION</p>
+                        <h2>Login security</h2>
+                    </div>
+                    <span class="icon-tile security-icon" aria-hidden="true">♧</span>
+                </div>
+                <p class="panel-copy">Your sign-in uses your password and authenticator app to help protect your account.</p>
+                <div class="security-status-row">
+                    <span class="security-symbol" aria-hidden="true">✓</span>
+                    <div class="security-status-copy">
+                        <strong>Authenticator app</strong>
+                        <span id="twoFactorStatus">Checking protection…</span>
+                    </div>
+                    <span id="twoFactorBadge" class="status-badge">—</span>
+                </div>
+                <div class="security-status-row password-row">
+                    <span class="security-symbol password-symbol" aria-hidden="true">••</span>
+                    <div class="security-status-copy">
+                        <strong>Password sign-in</strong>
+                        <span>Required before your verification code</span>
+                    </div>
+                    <span class="status-badge enabled-badge">Active</span>
+                </div>
+                <a id="setupAuthenticatorLink" class="text-action" href="two-factor.html" hidden>Set up your authenticator <span aria-hidden="true">→</span></a>
+            </article>
+
+            <article class="panel settings-panel" id="settings">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">PREFERENCES</p>
+                        <h2>Settings</h2>
+                    </div>
+                    <span class="icon-tile settings-icon" aria-hidden="true">⚙</span>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <strong>Account details</strong>
+                        <span>Your email and account type are shown in your profile.</span>
+                    </div>
+                    <span class="setting-label">View only</span>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <strong>Session</strong>
+                        <span>Sign out when you are finished using this device.</span>
+                    </div>
+                    <button id="settingsLogoutButton" class="subtle-button" type="button">Sign out</button>
+                </div>
+            </article>
+
+            <section id="administration" class="panel admin-panel" hidden>
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">ADMINISTRATION</p>
+                        <h2>Administrator accounts</h2>
+                    </div>
+                    <span class="icon-tile admin-icon" aria-hidden="true">♙</span>
+                </div>
+
+                <div id="bootstrapAdminPanel" class="bootstrap-admin-panel" hidden>
+                    <h3>Set up the first administrator</h3>
+                    <p>No administrator exists yet. Because you have signed in and verified your authenticator, you can claim the initial administrator role for this account. This can only be done once.</p>
+                    <button id="bootstrapAdminButton" class="login-button admin-primary-button" type="button">Make my account the first administrator</button>
+                </div>
+
+                <div id="adminTools" hidden>
+                    <p class="admin-intro">Create administrator accounts. New administrators must link their own authenticator app on first sign-in.</p>
+                    <p class="admin-password-note">Admin creation mode: a temporary password is generated and emailed to the registered address.</p>
+                    <form id="createAdminForm" class="admin-form">
+                        <div class="form-group">
+                            <label for="newAdminEmail">Administrator email</label>
+                            <input id="newAdminEmail" name="email" type="email" autocomplete="off" placeholder="admin@example.com" required>
+                        </div>
+                        <p class="admin-password-note">They will use the emailed temporary password, then link their authenticator on first sign-in.</p>
+                        <button id="createAdminButton" class="login-button admin-primary-button" type="submit">Create administrator</button>
+                        <p id="adminFormMessage" class="message" aria-live="polite"></p>
+                    </form>
+                    <div class="admin-list-heading">
+                        <h3>Accounts</h3>
+                        <button id="refreshAdminUsers" class="subtle-button" type="button">Refresh list</button>
+                    </div>
+                    <ul id="adminUserList" class="admin-user-list" aria-live="polite"></ul>
+                </div>
+            </section>
+
+            <aside class="privacy-note">
+                <span class="privacy-icon" aria-hidden="true">✦</span>
+                <p><strong>Your security matters.</strong> Authenticator codes are checked during sign-in, and your authenticator key is protected in storage.</p>
+            </aside>
+        </section>
+    </main>
+</body>
+</html>

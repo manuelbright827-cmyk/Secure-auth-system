@@ -1,0 +1,26 @@
+# Environment secrets
+.env
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Backups
+backups/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+
+client_secret*.json
+credentials.json
+secrets/
