@@ -32,5 +32,8 @@
   "allowScripts": {
     "argon2@0.45.1": true,
     "better-sqlite3@13.0.3": true
+  },
+  "devDependencies": {
+    "vercel": "^63.1.2"
   }
 }
