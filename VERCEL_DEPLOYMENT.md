@@ -16,11 +16,11 @@ The frontend and API share the same Vercel origin, so its existing relative `/ap
 
 ## PostgreSQL database
 
-Create a Supabase project and copy its PostgreSQL connection string from the project's database settings. For serverless Vercel functions, use Supabase's transaction pooler; use its session pooler if your selected database features require a persistent session. Set the string as the private `SUPABASE_DB_URL` environment variable; `DATABASE_URL`, `DATABASE_POSTGRES_URL`, and `DATABASE_POSTGRES_PRISMA_URL` remain supported aliases. Include Supabase's recommended `sslmode=require`. Keep the URL private; never commit it or paste it into chat. The API creates its PostgreSQL schema idempotently on first request.
+Create a Supabase project and copy its PostgreSQL connection string from the project's database settings. For serverless Vercel functions, use Supabase's transaction pooler; use its session pooler if your selected database features require a persistent session. Set the connection string as the private `SUPABASE_DB_URL` environment variable. The Supabase Vercel Marketplace variables `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, and `POSTGRES_URL_NON_POOLING` are also recognized, followed by the legacy `DATABASE_URL` and `DATABASE_POSTGRES_URL` aliases. Include Supabase's recommended `sslmode=require`. Keep the URL private; never commit it or paste it into chat. The API creates its PostgreSQL schema idempotently on first request.
 
 The app needs these production environment variables in Vercel Project Settings → Environment Variables:
 
-- `SUPABASE_DB_URL`: Supabase PostgreSQL connection string (or `DATABASE_URL` alias).
+- `SUPABASE_DB_URL`: Supabase PostgreSQL connection string. Supabase Marketplace `POSTGRES_URL` is also supported; use a Supabase URL for either name.
 - `NODE_ENV`: `production`.
 - `SESSION_SECRET`: a high-entropy private secret. If migrating current users, preserve the exact local value; it also encrypts their TOTP secrets.
 - `PASSWORD_PEPPER`: a high-entropy private secret. If migrating users, preserve the exact local value or their password hashes will no longer verify.

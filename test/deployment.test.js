@@ -17,8 +17,8 @@ test('production and Vercel refuse to fall back to SQLite without a PostgreSQL U
 });
 
 test('configured PostgreSQL is selected by the production database adapter', () => {
-    const env = { ...process.env, VERCEL: '1', NODE_ENV: 'production', SUPABASE_DB_URL: 'postgresql://test:test@127.0.0.1:5432/test?sslmode=require' };
-    const result = spawnSync(process.execPath, ['-e', "const db=require('./backends/config/database'); if(db.dialect!=='postgres') process.exit(2); db.close();"], { cwd: root, env, encoding: 'utf8' });
+    const env = { ...process.env, VERCEL: '1', NODE_ENV: 'production', POSTGRES_URL: 'postgresql://test:test@db.project.supabase.co:5432/test?sslmode=require', DATABASE_URL: 'postgresql://legacy:legacy@legacy.example.com/test' };
+    const result = spawnSync(process.execPath, ['-e', "const db=require('./backends/config/database'); if(db.dialect!=='postgres'||!db.pool.options.connectionString.includes('db.project.supabase.co')) process.exit(2); db.close();"], { cwd: root, env, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 

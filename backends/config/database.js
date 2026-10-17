@@ -7,6 +7,9 @@ dotenv.config({ path: path.join(projectRoot, '.env') });
 
 const configuredDatabaseUrl = [
 	process.env.SUPABASE_DB_URL,
+	process.env.POSTGRES_URL,
+	process.env.POSTGRES_PRISMA_URL,
+	process.env.POSTGRES_URL_NON_POOLING,
 	process.env.DATABASE_POSTGRES_URL,
 	process.env.DATABASE_POSTGRES_PRISMA_URL,
 	process.env.DATABASE_URL
@@ -24,7 +27,8 @@ if (configuredDatabaseUrl) {
 const isPostgres = Boolean(databaseUrl);
 const isVercelRuntime = process.env.VERCEL === '1';
 const isProduction = process.env.NODE_ENV === 'production';
-if (!isPostgres && (isVercelRuntime || isProduction)) {
+const isProductionRuntime = isVercelRuntime || isProduction;
+if (!isPostgres && isProductionRuntime) {
 	throw new Error(
 		'PostgreSQL is required in production. Set SUPABASE_DB_URL (or DATABASE_URL) in the deployment environment; SQLite is available only for local development.'
 	);
