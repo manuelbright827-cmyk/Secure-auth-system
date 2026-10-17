@@ -1,0 +1,15 @@
+.git/
+.vercel/
+.vscode/
+node_modules/
+.env*
+credentials.json
+client_secret*.json
+secrets/
+backups/
+backends/database/*.db
+backends/database/*.db-shm
+backends/database/*.db-wal
+inspect-routes.js
+verify-reset-flow.js
+verify-totp-check.js

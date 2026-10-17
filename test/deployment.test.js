@@ -27,6 +27,14 @@ test('Vercel serves static frontend output and configures API function duration'
     assert.equal(config.outputDirectory, 'frontend');
     assert.equal(config.functions['api/**/*.js'].maxDuration, 30);
     assert.ok(fs.existsSync(path.join(root, 'api/pharmacy/[...path].js')));
+    for (const file of [
+        'api/pharmacy/admin/users.js',
+        'api/pharmacy/admin/users/[id].js',
+        'api/pharmacy/admin/users/[id]/role.js',
+        'api/pharmacy/admin/audit-logs.js',
+        'api/pharmacy/admin/backups.js',
+        'api/pharmacy/admin/backups/restore.js'
+    ]) assert.ok(fs.existsSync(path.join(root, file)), `${file} exists as an explicit Vercel route`);
 });
 
 test('all pharmacy pages exist and navigate through the shared page shell', () => {
@@ -66,6 +74,27 @@ test('Vercel pharmacy API catch-all forwards requests to the protected Express r
     assert.match(routes, /router\.get\('\/prescriptions', requireRole\('pharmacist'\)/);
     assert.match(routes, /router\.get\('\/sales', requireRole\('cashier', 'manager'\)/);
     assert.match(routes, /router\.get\('\/reports', requireRole\('manager'\)/);
+});
+
+test('Admin Users frontend uses the protected production pharmacy API path', () => {
+    const source = read('frontend/pharmacy.js');
+    assert.match(source, /request\('\/admin\/users'\)/);
+    assert.match(source, /request\(`\/admin\/users\/\$\{u\.id\}\/role`/);
+    assert.match(source, /\/api\/pharmacy/);
+});
+
+test('Vercel health response only classifies its active database provider', () => {
+    const source = read('api/health.js');
+    assert.match(source, /provider/);
+    assert.match(source, /supabase/);
+    assert.doesNotMatch(source, /connectionString\s*[,}]/);
+});
+
+test('Vercel deployment excludes local secrets, database files and private working files', () => {
+    const ignored = read('.vercelignore');
+    for (const entry of ['.env*', 'credentials.json', 'client_secret*.json', 'secrets/', 'backends/database/*.db', 'backups/']) {
+        assert.ok(ignored.includes(entry), `${entry} is excluded from deployment`);
+    }
 });
 
 test('local API routes respond and reject anonymous access', () => {

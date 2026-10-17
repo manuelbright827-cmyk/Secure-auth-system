@@ -5,7 +5,7 @@
   "main": "backends/server.js",
   "scripts": {
     "start": "node backends/server.js",
-    "test": "node --test",
+    "test": "node --test test/deployment.test.js",
     "db:migrate-sqlite-to-postgres": "node backends/scripts/migrate-sqlite-to-postgres.js",
     "db:restore-postgres-backup": "node backends/scripts/restore-postgres-backup.js",
     "drive:configure": "node backends/scripts/configure-google-drive.js",
