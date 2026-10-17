@@ -1,3 +1,9 @@
+const API_BASE_URL = (window.API_BASE_URL || '').replace(/\/$/, '');
+const resolveApiUrl = (url) => {
+    if (!url.startsWith('/')) return url;
+    return API_BASE_URL ? `${API_BASE_URL}${url}` : url;
+};
+
 const dashboardMessage = document.getElementById('dashboardMessage');
 const overview = document.getElementById('overview');
 const logoutButtons = [
@@ -25,7 +31,7 @@ async function readApiJson(response) {
 }
 
 async function authenticatedJson(url, options = {}) {
-    const response = await fetch(url, {
+    const response = await fetch(resolveApiUrl(url), {
         credentials: 'include',
         ...options,
         headers: {
@@ -57,7 +63,7 @@ function formatDate(value) {
 
 async function loadAccount() {
     try {
-        const response = await fetch('/api/auth/me', { credentials: 'include' });
+        const response = await fetch(resolveApiUrl('/api/auth/me'), { credentials: 'include' });
         const data = await readApiJson(response);
 
         if (!response.ok) {
@@ -168,7 +174,7 @@ async function loadAdminUsers() {
 }
 
 async function loadAdminTools(role) {
-    const isAdmin = role === 'administrator';
+    const isAdmin = ['administrator', 'admin'].includes(role);
     try {
         const { response, data } = await authenticatedJson('/api/auth/admin/status');
         if (!response.ok) throw new Error(data.message || 'Could not check administrator access.');
@@ -237,7 +243,7 @@ async function signOut() {
     for (const button of logoutButtons) button.disabled = true;
 
     try {
-        await fetch('/api/auth/logout', {
+        await fetch(resolveApiUrl('/api/auth/logout'), {
             method: 'POST',
             credentials: 'include'
         });

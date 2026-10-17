@@ -1,3 +1,9 @@
+const API_BASE_URL = (window.API_BASE_URL || '').replace(/\/$/, '');
+const resolveApiUrl = (url) => {
+    if (!url.startsWith('/')) return url;
+    return API_BASE_URL ? `${API_BASE_URL}${url}` : url;
+};
+
 const form = document.getElementById('passwordSetupForm');
 const message = document.getElementById('passwordSetupMessage');
 const submitButton = document.getElementById('passwordSetupButton');
@@ -17,7 +23,7 @@ form.addEventListener('submit', async (event) => {
 
     submitButton.disabled = true;
     try {
-        const response = await fetch('/api/auth/password/setup', {
+        const response = await fetch(resolveApiUrl('/api/auth/password/setup'), {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },

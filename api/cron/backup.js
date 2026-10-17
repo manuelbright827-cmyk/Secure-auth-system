@@ -1,14 +1,7 @@
 const crypto = require('node:crypto');
 const db = require('../../backends/config/database');
 const { ensureSchema } = require('../../backends/database/schema');
-const { uploadBackupBuffer } = require('../../backends/services/google-drive.service');
-
-const backupTables = [
-    'users',
-    'audit_logs',
-    'password_setup_tokens',
-    'password_reset_codes'
-];
+const { createPostgresBackup } = require('../../backends/services/backup.service');
 
 function authorized(req) {
     const secret = process.env.CRON_SECRET || '';
@@ -38,23 +31,7 @@ module.exports = async function backupHandler(req, res) {
         if (db.dialect !== 'postgres') {
             return sendJson(res, 503, { message: 'Scheduled cloud backups require PostgreSQL.' });
         }
-        if (!process.env.GOOGLE_DRIVE_FOLDER_ID) {
-            return sendJson(res, 503, { message: 'Google Drive backup settings are not configured.' });
-        }
-
-        const tables = {};
-        for (const table of backupTables) {
-            const result = await db.query(`SELECT * FROM ${table} ORDER BY 1`);
-            tables[table] = result.rows;
-        }
-
-        const snapshot = Buffer.from(JSON.stringify({
-            format: 'secure-auth-postgres-json-v1',
-            createdAt: new Date().toISOString(),
-            tables
-        }));
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const uploaded = await uploadBackupBuffer(snapshot, `auth-db-${timestamp}.pg.json.enc`);
+        const uploaded = await createPostgresBackup();
         return sendJson(res, 200, { status: 'ok', backup: uploaded.name });
     } catch (error) {
         console.error('Scheduled PostgreSQL backup failed:', error.message);

@@ -3,6 +3,7 @@ const path = require('node:path');
 const helmet = require('helmet');
 const sessionMiddleware = require('./config/session');
 const authRoutes = require('./routes/auth.routes');
+const pharmacyRoutes = require('./routes/pharmacy.routes');
 
 const projectRoot = path.resolve(__dirname, '..');
 const app = express();
@@ -19,10 +20,23 @@ if (process.env.VERCEL !== '1') {
     app.use(express.static(path.join(projectRoot, 'frontend')));
 }
 
+app.get('/forgot-password', (req, res) => {
+    res.sendFile(path.join(projectRoot, 'frontend', 'forgot-password.html'));
+});
+
+app.get('/forgot-password.html', (req, res) => {
+    res.sendFile(path.join(projectRoot, 'frontend', 'forgot-password.html'));
+});
+
 app.use('/api/auth', authRoutes);
+app.use('/api/pharmacy', pharmacyRoutes);
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', version: APP_VERSION });
+});
+
+app.use('/api', (req, res) => {
+    res.status(404).json({ message: 'API endpoint not found.' });
 });
 
 app.use((error, req, res, next) => {

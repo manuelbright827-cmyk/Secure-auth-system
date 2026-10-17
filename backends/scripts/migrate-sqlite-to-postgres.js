@@ -7,14 +7,23 @@ const db = require('../config/database');
 
 const tables = {
     users: ['id', 'email', 'password_hash', 'role', 'two_factor_secret', 'two_factor_enabled', 'is_active', 'created_at', 'updated_at'],
-    audit_logs: ['id', 'user_id', 'action', 'ip_address', 'user_agent', 'created_at'],
+    audit_logs: ['id', 'user_id', 'action', 'ip_address', 'user_agent', 'actor_role', 'resource', 'result', 'created_at'],
     password_setup_tokens: ['token_hash', 'user_id', 'expires_at', 'used_at', 'created_at'],
-    password_reset_codes: ['code_hash', 'user_id', 'expires_at', 'used_at', 'created_at']
+    password_reset_codes: ['code_hash', 'user_id', 'expires_at', 'used_at', 'created_at'],
+    rate_limit_counters: ['key', 'hits', 'reset_at'],
+    deleted_users: ['id', 'original_user_id', 'email', 'role', 'deleted_by', 'deleted_at'],
+    medicines: ['id', 'name', 'sku', 'category', 'description', 'unit_price', 'reorder_level', 'is_active', 'created_by', 'updated_by', 'created_at', 'updated_at'],
+    inventory: ['medicine_id', 'quantity', 'updated_at'],
+    customers: ['id', 'name', 'phone', 'created_at'],
+    prescriptions: ['id', 'customer_id', 'prescriber', 'reference', 'status', 'created_by', 'dispensed_by', 'created_at', 'dispensed_at'],
+    prescription_items: ['id', 'prescription_id', 'medicine_id', 'quantity'],
+    sales: ['id', 'customer_id', 'cashier_id', 'total', 'status', 'created_at'],
+    sale_items: ['id', 'sale_id', 'medicine_id', 'quantity', 'unit_price', 'line_total']
 };
 
 async function main() {
     if (db.dialect !== 'postgres') {
-        throw new Error('Set DATABASE_URL to the destination PostgreSQL database before running this migration.');
+        throw new Error('Set SUPABASE_DB_URL (or DATABASE_URL) to the destination PostgreSQL database before running this migration.');
     }
 
     const sourcePath = path.resolve(
@@ -44,14 +53,20 @@ async function main() {
                 continue;
             }
 
-            const rows = sqlite.prepare(`SELECT ${columns.join(', ')} FROM ${table}`).all();
+            const sourceColumns = new Set(sqlite.prepare(`PRAGMA table_info("${table}")`).all().map((column) => column.name));
+            const compatibleColumns = columns.filter((column) => sourceColumns.has(column));
+            if (!compatibleColumns.length) {
+                copied[table] = 0;
+                continue;
+            }
+            const rows = sqlite.prepare(`SELECT ${compatibleColumns.join(', ')} FROM ${table}`).all();
             copied[table] = rows.length;
             if (!rows.length) continue;
 
-            const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
-            const insert = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`;
+            const placeholders = compatibleColumns.map((_, index) => `$${index + 1}`).join(', ');
+            const insert = `INSERT INTO ${table} (${compatibleColumns.join(', ')}) VALUES (${placeholders})`;
             for (const row of rows) {
-                await client.query(insert, columns.map((column) => (
+                await client.query(insert, compatibleColumns.map((column) => (
                     ['is_active', 'two_factor_enabled'].includes(column)
                         ? Boolean(row[column])
                         : row[column]
@@ -59,7 +74,7 @@ async function main() {
             }
         }
 
-        for (const table of ['users', 'audit_logs']) {
+        for (const table of ['users', 'audit_logs', 'deleted_users', 'medicines', 'customers', 'prescriptions', 'prescription_items', 'sales', 'sale_items']) {
             await client.query(`
                 SELECT setval(
                     pg_get_serial_sequence('${table}', 'id'),

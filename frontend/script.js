@@ -1,3 +1,9 @@
+const API_BASE_URL = (window.API_BASE_URL || '').replace(/\/$/, '');
+const resolveApiUrl = (url) => {
+    if (!url.startsWith('/')) return url;
+    return API_BASE_URL ? `${API_BASE_URL}${url}` : url;
+};
+
 const loginForm = document.getElementById('loginForm');
 const passwordInput = document.getElementById('password');
 const togglePassword = document.getElementById('togglePassword');
@@ -8,7 +14,7 @@ const setupMessage = document.getElementById('setupMessage');
 const twoFactorMessage = document.getElementById('twoFactorMessage');
 
 async function postCode(url, code) {
-    const response = await fetch(url, {
+    const response = await fetch(resolveApiUrl(url), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -41,7 +47,7 @@ if (loginForm) {
         }
 
         try {
-            const response = await fetch('/api/auth/login', {
+            const response = await fetch(resolveApiUrl('/api/auth/login'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -88,7 +94,7 @@ if (setupForm && twoFactorForm) {
 
     async function initializeAuthenticatorStage() {
         try {
-            const statusResponse = await fetch('/api/auth/2fa/status', {
+            const statusResponse = await fetch(resolveApiUrl('/api/auth/2fa/status'), {
                 credentials: 'include'
             });
             const status = await statusResponse.json();
@@ -104,7 +110,7 @@ if (setupForm && twoFactorForm) {
                 return;
             }
 
-            const setupResponse = await fetch('/api/auth/2fa/setup', {
+            const setupResponse = await fetch(resolveApiUrl('/api/auth/2fa/setup'), {
                 method: 'POST',
                 credentials: 'include'
             });

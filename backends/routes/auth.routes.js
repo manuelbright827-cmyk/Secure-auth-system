@@ -91,7 +91,7 @@ async function getAdminAccount(req, res) {
     const user = await getAuthenticatedAccount(req, res);
     if (!user) return null;
 
-    if (user.role !== 'administrator') {
+    if (!['admin', 'administrator'].includes(user.role)) {
         res.status(403).json({ message: 'Only the primary administrator can manage administrator accounts' });
         return null;
     }
@@ -148,6 +148,8 @@ router.post('/login', loginLimiter, async (req, res) => {
         );
 
         if (!user) {
+            await db.query(`INSERT INTO audit_logs (user_id, action, ip_address, user_agent, actor_role, resource, result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [null, 'login.failed', req.ip || null, req.get('user-agent') || null, null, JSON.stringify({ email: email.trim().toLowerCase() }), 'failure']);
             return res.status(401).json({
                 message: 'Invalid email or password'
             });
@@ -160,6 +162,9 @@ router.post('/login', loginLimiter, async (req, res) => {
         };
         delete req.session.user;
         delete req.session.pendingTwoFactorSecret;
+
+        await db.query(`INSERT INTO audit_logs (user_id, action, ip_address, user_agent, actor_role, resource, result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [user.id, 'login.password_accepted', req.ip || null, req.get('user-agent') || null, user.role, null, 'pending_2fa']);
 
         return res.json({
             message: 'Password accepted. Complete authenticator setup or verification.',
@@ -217,6 +222,8 @@ router.post('/2fa/verify-setup', verificationLimiter, async (req, res) => {
     }
 
     if (!(await verifyAuthenticatorCode(secret, code))) {
+        await db.query(`INSERT INTO audit_logs (user_id, action, ip_address, user_agent, actor_role, resource, result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [user.id, 'two_factor.setup_failed', req.ip || null, req.get('user-agent') || null, user.role, null, 'failure']);
         return res.status(401).json({ message: 'Code did not match. Check your authenticator app and try again.' });
     }
 
@@ -235,6 +242,8 @@ router.post('/2fa/verify-setup', verificationLimiter, async (req, res) => {
     }
 
     completeSignIn(req, user);
+    await db.query(`INSERT INTO audit_logs (user_id, action, ip_address, user_agent, actor_role, resource, result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [user.id, 'login.completed', req.ip || null, req.get('user-agent') || null, user.role, null, 'success']);
     return res.json({ message: 'Authenticator linked. Two-factor sign-in is enabled.' });
 });
 
@@ -260,10 +269,14 @@ router.post('/2fa/verify', verificationLimiter, async (req, res) => {
     }
 
     if (!(await verifyAuthenticatorCode(secret, code))) {
+        await db.query(`INSERT INTO audit_logs (user_id, action, ip_address, user_agent, actor_role, resource, result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [user.id, 'two_factor.verification_failed', req.ip || null, req.get('user-agent') || null, user.role, null, 'failure']);
         return res.status(401).json({ message: 'Invalid code. Check your authenticator app and try again.' });
     }
 
     completeSignIn(req, user);
+    await db.query(`INSERT INTO audit_logs (user_id, action, ip_address, user_agent, actor_role, resource, result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [user.id, 'login.completed', req.ip || null, req.get('user-agent') || null, user.role, null, 'success']);
     return res.json({ message: 'Sign-in successful' });
 });
 
@@ -302,7 +315,7 @@ router.get('/admin/status', async (req, res) => {
     const adminCount = Number(adminCountResult.rows[0].count);
 
     return res.json({
-        isAdmin: user.role === 'administrator',
+        isAdmin: ['admin', 'administrator'].includes(user.role),
         canBootstrap: adminCount === 0
     });
 });
@@ -415,6 +428,7 @@ router.delete('/admin/users/:id', async (req, res) => {
             return { status: 403, message: 'The primary administrator account cannot be deleted here.' };
         }
 
+        await db.query('INSERT INTO deleted_users (original_user_id, email, role, deleted_by) VALUES (?, ?, ?, ?)', [target.id, target.email, target.role, admin.id]);
         await db.query('DELETE FROM users WHERE id = ? AND role = \'admin\'', [userId]);
         await db.query(`
             INSERT INTO audit_logs (user_id, action, ip_address, user_agent)
@@ -571,6 +585,12 @@ router.post('/password/reset/confirm', passwordResetLimiter, async (req, res) =>
 });
 
 router.post('/logout', (req, res) => {
+    const user = req.session.user;
+    if (user) {
+        db.query(`INSERT INTO audit_logs (user_id, action, ip_address, user_agent, actor_role, resource, result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [user.id, 'logout', req.ip || null, req.get('user-agent') || null, user.role, null, 'success'])
+            .catch((error) => console.error('Could not record logout audit event:', error.message));
+    }
     req.session.destroy((error) => {
         if (error) {
             console.error('Logout error:', error);

@@ -1,5 +1,11 @@
 {
   "outputDirectory": "frontend",
+  "rewrites": [
+    {
+      "source": "/forgot-password",
+      "destination": "/forgot-password.html"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/backup",

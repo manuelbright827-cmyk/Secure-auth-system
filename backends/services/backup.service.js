@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const db = require('../config/database');
-const { uploadBackup } = require('./google-drive.service');
+const { uploadBackup, uploadBackupBuffer } = require('./google-drive.service');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 const backupDirectory = path.resolve(
@@ -13,6 +13,10 @@ const retentionDays = Number.parseInt(process.env.BACKUP_RETENTION_DAYS || '14',
 const backupIntervalMs = (Number.isFinite(intervalHours) && intervalHours > 0 ? intervalHours : 24) * 60 * 60 * 1000;
 const backupRetentionMs = (Number.isFinite(retentionDays) && retentionDays > 0 ? retentionDays : 14) * 24 * 60 * 60 * 1000;
 const backupPrefix = 'auth-db-';
+const postgresBackupTables = [
+    'users', 'audit_logs', 'password_setup_tokens', 'password_reset_codes', 'rate_limit_counters',
+    'deleted_users', 'medicines', 'inventory', 'customers', 'prescriptions', 'prescription_items', 'sales', 'sale_items'
+];
 
 let backupInProgress = false;
 let backupTimer;
@@ -73,6 +77,23 @@ async function createBackup() {
     }
 }
 
+async function createPostgresBackup() {
+    if (db.dialect !== 'postgres') throw new Error('PostgreSQL backup requested while SQLite is active.');
+    if (!process.env.GOOGLE_DRIVE_FOLDER_ID) throw new Error('Configure cloud backup storage before creating a PostgreSQL backup.');
+    const tables = {};
+    for (const table of postgresBackupTables) {
+        const result = await db.query(`SELECT * FROM ${table} ORDER BY 1`);
+        tables[table] = result.rows;
+    }
+    const snapshot = Buffer.from(JSON.stringify({
+        format: 'secure-auth-postgres-json-v1',
+        createdAt: new Date().toISOString(),
+        tables
+    }));
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return uploadBackupBuffer(snapshot, `${backupPrefix}${timestamp}.pg.json.enc`);
+}
+
 function startScheduledBackups() {
     if (backupTimer) return;
 
@@ -96,6 +117,8 @@ function stopScheduledBackups() {
 
 module.exports = {
     createBackup,
+    createPostgresBackup,
+    postgresBackupTables,
     removeExpiredBackups,
     startScheduledBackups,
     stopScheduledBackups

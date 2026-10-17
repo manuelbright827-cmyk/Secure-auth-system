@@ -1,3 +1,9 @@
+const API_BASE_URL = (window.API_BASE_URL || '').replace(/\/$/, '');
+const resolveApiUrl = (url) => {
+    if (!url.startsWith('/')) return url;
+    return API_BASE_URL ? `${API_BASE_URL}${url}` : url;
+};
+
 const requestForm = document.getElementById('resetRequestForm');
 const confirmForm = document.getElementById('resetConfirmForm');
 const requestMessage = document.getElementById('resetRequestMessage');
@@ -8,13 +14,26 @@ const emailInput = document.getElementById('resetEmail');
 const codeInput = document.getElementById('resetCode');
 
 async function postJson(url, body) {
-    const response = await fetch(url, {
+    const response = await fetch(resolveApiUrl(url), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
     });
-    const data = await response.json();
+
+    const text = await response.text();
+    let data = {};
+
+    if (text) {
+        try {
+            data = JSON.parse(text);
+        } catch (error) {
+            data = {
+                message: 'The server returned an unexpected response. Please try again.'
+            };
+        }
+    }
+
     return { response, data };
 }
 
@@ -70,7 +89,7 @@ confirmForm.addEventListener('submit', async (event) => {
         confirmMessage.textContent = `${data.message} Redirecting to sign in...`;
         confirmMessage.className = 'message success';
         confirmForm.reset();
-        window.setTimeout(() => window.location.assign('index.html'), 1400);
+        window.setTimeout(() => window.location.assign('/'), 1400);
     } catch (error) {
         confirmMessage.textContent = error.message || 'Unable to connect to the server.';
         confirmMessage.className = 'message error';

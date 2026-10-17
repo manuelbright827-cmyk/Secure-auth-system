@@ -8,9 +8,18 @@ const { ensureSchema } = require('../database/schema');
 
 const tableColumns = {
     users: ['id', 'email', 'password_hash', 'role', 'two_factor_secret', 'two_factor_enabled', 'is_active', 'created_at', 'updated_at'],
-    audit_logs: ['id', 'user_id', 'action', 'ip_address', 'user_agent', 'created_at'],
+    audit_logs: ['id', 'user_id', 'action', 'ip_address', 'user_agent', 'actor_role', 'resource', 'result', 'created_at'],
     password_setup_tokens: ['token_hash', 'user_id', 'expires_at', 'used_at', 'created_at'],
-    password_reset_codes: ['code_hash', 'user_id', 'expires_at', 'used_at', 'created_at']
+    password_reset_codes: ['code_hash', 'user_id', 'expires_at', 'used_at', 'created_at'],
+    rate_limit_counters: ['key', 'hits', 'reset_at'],
+    deleted_users: ['id', 'original_user_id', 'email', 'role', 'deleted_by', 'deleted_at'],
+    medicines: ['id', 'name', 'sku', 'category', 'description', 'unit_price', 'reorder_level', 'is_active', 'created_by', 'updated_by', 'created_at', 'updated_at'],
+    inventory: ['medicine_id', 'quantity', 'updated_at'],
+    customers: ['id', 'name', 'phone', 'created_at'],
+    prescriptions: ['id', 'customer_id', 'prescriber', 'reference', 'status', 'created_by', 'dispensed_by', 'created_at', 'dispensed_at'],
+    prescription_items: ['id', 'prescription_id', 'medicine_id', 'quantity'],
+    sales: ['id', 'customer_id', 'cashier_id', 'total', 'status', 'created_at'],
+    sale_items: ['id', 'sale_id', 'medicine_id', 'quantity', 'unit_price', 'line_total']
 };
 
 function decryptSnapshot(encrypted) {
@@ -43,8 +52,12 @@ async function main() {
     if (snapshot.format !== 'secure-auth-postgres-json-v1' || !snapshot.tables) {
         throw new Error('This encrypted file is not a PostgreSQL snapshot for this app.');
     }
-    for (const table of Object.keys(tableColumns)) {
+    for (const table of ['users', 'audit_logs', 'password_setup_tokens', 'password_reset_codes']) {
         if (!Array.isArray(snapshot.tables[table])) throw new Error(`Backup is missing table ${table}.`);
+    }
+    for (const table of Object.keys(tableColumns)) {
+        if (snapshot.tables[table] === undefined) snapshot.tables[table] = [];
+        if (!Array.isArray(snapshot.tables[table])) throw new Error(`Backup table ${table} is invalid.`);
     }
 
     await ensureSchema();
@@ -64,7 +77,7 @@ async function main() {
                 const values = columns.map((column) => (
                     ['is_active', 'two_factor_enabled'].includes(column)
                         ? Boolean(row[column])
-                        : row[column] ?? null
+                        : row[column] ?? (column === 'result' ? 'success' : null)
                 ));
                 await client.query(
                     `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`,
@@ -73,7 +86,7 @@ async function main() {
             }
         }
 
-        for (const table of ['users', 'audit_logs']) {
+        for (const table of ['users', 'audit_logs', 'deleted_users', 'medicines', 'customers', 'prescriptions', 'prescription_items', 'sales', 'sale_items']) {
             await client.query(`
                 SELECT setval(
                     pg_get_serial_sequence('${table}', 'id'),

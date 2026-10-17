@@ -1,6 +1,6 @@
 # Deploying Secure Auth System on Vercel
 
-Vercel serves the static site from `frontend/` and invokes the existing Express authentication routes as a Node Function from `api/[...path].js`. Local development continues to use SQLite; when `DATABASE_URL` is set, both users and sessions use PostgreSQL. Vercel's temporary filesystem is never used for account storage.
+Vercel serves the static site from `frontend/` and invokes the existing Express routes as a Node Function from `api/[...path].js`. Configure Supabase with `SUPABASE_DB_URL` (or `DATABASE_URL`); users, pharmacy records, rate limits, audit logs, and sessions then use PostgreSQL. Without a PostgreSQL URL, local development continues to use SQLite. Vercel's temporary filesystem is never used for account storage.
 
 ## Vercel project configuration
 
@@ -15,11 +15,11 @@ The frontend and API share the same Vercel origin, so its existing relative `/ap
 
 ## PostgreSQL database
 
-Create a free-tier PostgreSQL database through a Vercel Marketplace provider such as Neon, subject to the provider's current limits and terms. In that provider, use its pooled connection string for Vercel's `DATABASE_URL` environment variable. Keep the URL private; never commit it or paste it into chat. The API creates its PostgreSQL schema idempotently on first request.
+Create a Supabase project and copy its PostgreSQL connection string from the project's database settings. Use a session-pooler connection if the deployment host cannot reach Supabase's direct endpoint. Set the string as the private `SUPABASE_DB_URL` environment variable; `DATABASE_URL` and `DATABASE_POSTGRES_URL` remain supported aliases. Keep the URL private; never commit it or paste it into chat. The API creates its PostgreSQL schema idempotently on first request.
 
 The app needs these production environment variables in Vercel Project Settings → Environment Variables:
 
-- `DATABASE_URL`: pooled PostgreSQL connection string.
+- `SUPABASE_DB_URL`: Supabase PostgreSQL connection string (or `DATABASE_URL` alias).
 - `NODE_ENV`: `production`.
 - `SESSION_SECRET`: a high-entropy private secret. If migrating current users, preserve the exact local value; it also encrypts their TOTP secrets.
 - `PASSWORD_PEPPER`: a high-entropy private secret. If migrating users, preserve the exact local value or their password hashes will no longer verify.
@@ -34,14 +34,14 @@ Set the variables for Production (and Preview only if needed) and redeploy after
 
 ## Transfer existing local accounts
 
-The local SQLite database and hosted PostgreSQL database are separate. To keep existing users, first configure `DATABASE_URL` privately in your local process and run `npm.cmd run db:migrate-sqlite-to-postgres` once. The migration refuses to copy into non-empty application tables. It preserves password hashes, encrypted authenticator secrets, audit rows, and outstanding setup/reset tokens. Keep the existing `SESSION_SECRET` and `PASSWORD_PEPPER` values unchanged in Vercel. Do not run the migration twice or against a database already containing accounts.
+The local SQLite database and hosted PostgreSQL database are separate. To migrate, configure `SUPABASE_DB_URL` privately in your local process and run `npm.cmd run db:migrate-sqlite-to-postgres` once. The migration refuses to copy into non-empty application tables. It transfers auth, rate-limit, audit, archived-user, medicine, inventory, customer, prescription, and sales data when present. It preserves password hashes and encrypted authenticator secrets. Keep the existing `SESSION_SECRET`, `PASSWORD_PEPPER`, and TOTP encryption key values unchanged. Do not run the migration twice or against a database already containing application data. The source SQLite file is read-only during migration and remains in place.
 
 If you prefer a clean cloud start instead, do not run that command; a first-user provisioning flow will be needed because the current app has no public registration endpoint.
 
 ## Backups and local/offline use
 
-Vercel runs the authenticated `/api/cron/backup` endpoint once daily at 03:00 UTC. It exports the application tables to JSON in memory, encrypts the snapshot with AES-256-GCM, and uploads only the encrypted object to the configured Drive folder. The Drive file is not a SQLite database; it contains a PostgreSQL data snapshot. Old app backups are pruned according to `BACKUP_RETENTION_DAYS`.
+Vercel runs the authenticated `/api/cron/backup` endpoint once daily at 03:00 UTC. It exports auth and pharmacy tables to JSON in memory, encrypts the snapshot with AES-256-GCM, and uploads only the encrypted object to the configured Drive folder. The Drive file is not a SQLite database; it contains a PostgreSQL data snapshot. Old app backups are pruned according to `BACKUP_RETENTION_DAYS`.
 
-To restore a downloaded `auth-db-*.pg.json.enc` file, set the original `BACKUP_ENCRYPTION_KEY` and a `DATABASE_URL` pointing to a new, empty PostgreSQL database in your private environment, then run `npm.cmd run db:restore-postgres-backup -- <path-to-file>`. The command validates the format and refuses to write if any application table already has rows.
+To restore a downloaded `auth-db-*.pg.json.enc` file, set the original `BACKUP_ENCRYPTION_KEY` and `SUPABASE_DB_URL` pointing to a new, empty PostgreSQL database in your private environment, then run `npm.cmd run db:restore-postgres-backup -- <path-to-file>`. The command validates the format and refuses to write if any application table already has rows.
 
-On the computer, leaving `DATABASE_URL` unset keeps the existing SQLite database and local file snapshot scheduler. Those SQLite snapshots remain available offline. Cloud PostgreSQL and local SQLite are separate databases; the local copy does not automatically mirror later cloud changes. Preserve provider-level backups too, and keep the encryption key separately from Drive.
+On the computer, leaving all PostgreSQL URL variables unset keeps the existing SQLite database and local file snapshot scheduler. Those SQLite snapshots remain available offline. The migration does not delete the SQLite file. Cloud PostgreSQL and local SQLite are separate databases; the local copy does not automatically mirror later cloud changes. Preserve provider-level backups too, and keep the encryption key separately from Drive.

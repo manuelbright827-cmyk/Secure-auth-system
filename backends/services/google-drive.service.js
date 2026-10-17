@@ -225,8 +225,23 @@ async function pruneDriveBackups(folderId) {
     }
 }
 
+async function listDriveBackups() {
+    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    if (!folderId) throw new Error('Set GOOGLE_DRIVE_FOLDER_ID to list cloud backups.');
+    const query = new URLSearchParams({
+        q: `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false and name contains '${backupPrefix}'`,
+        fields: 'files(id,name,createdTime,size)',
+        pageSize: '1000',
+        orderBy: 'createdTime desc'
+    });
+    const response = await driveRequest(`${driveApiBase}/files?${query}`);
+    const result = await response.json();
+    return (result.files || []).filter((file) => file.name.startsWith(backupPrefix) && file.name.endsWith('.enc'));
+}
+
 module.exports = {
     loadClientCredentials,
     uploadBackup,
-    uploadBackupBuffer
+    uploadBackupBuffer,
+    listDriveBackups
 };
