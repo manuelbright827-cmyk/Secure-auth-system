@@ -22,6 +22,13 @@ if (configuredDatabaseUrl) {
 	}
 }
 const isPostgres = Boolean(databaseUrl);
+const isVercelRuntime = process.env.VERCEL === '1';
+const isProduction = process.env.NODE_ENV === 'production';
+if (!isPostgres && (isVercelRuntime || isProduction)) {
+	throw new Error(
+		'PostgreSQL is required in production. Set SUPABASE_DB_URL (or DATABASE_URL) in the deployment environment; SQLite is available only for local development.'
+	);
+}
 const transactionContext = new AsyncLocalStorage();
 let sqlite;
 let pool;

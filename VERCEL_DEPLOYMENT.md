@@ -1,6 +1,6 @@
 # Deploying Secure Auth System on Vercel
 
-Vercel serves the static site from `frontend/` and invokes the existing Express routes as a Node Function from `api/[...path].js`. Configure Supabase with `SUPABASE_DB_URL` (or `DATABASE_URL`); users, pharmacy records, rate limits, audit logs, and sessions then use PostgreSQL. Without a PostgreSQL URL, local development continues to use SQLite. Vercel's temporary filesystem is never used for account storage.
+Vercel serves the static site from `frontend/` and invokes the Express application through the Node Functions under `api/`. Configure Supabase with `SUPABASE_DB_URL` (or a supported PostgreSQL URL alias); users, pharmacy records, rate limits, audit logs, and sessions then use PostgreSQL. SQLite is local-development-only: the application now fails fast in production or on Vercel if no PostgreSQL URL is configured. This prevents a missing deployment variable from silently opening a SQLite path in Vercel's temporary/read-only filesystem, which can surface as `SQLITE_CANTOPEN`.
 
 ## Vercel project configuration
 
@@ -10,12 +10,13 @@ Use a single Vercel project connected to this repository and the `main` branch:
 - Keep the Framework Preset as **Other** unless Vercel auto-detects it correctly.
 - Use the repository's `vercel.json`; its static output directory is `frontend` and Vercel discovers the `api/` function.
 - Do not add a build command. Vercel runs the Node package install from the root `package.json`.
+- Confirm the connected Git repository is `manuelbright827-cmyk/Secure-auth-system`, the Production Branch is `main`, and the Root Directory is the repository root. The local Git remote and branch do not by themselves prove the Vercel dashboard linkage.
 
 The frontend and API share the same Vercel origin, so its existing relative `/api/...` fetches and `SameSite=Lax` session cookie stay same-origin; no CORS allowlist or cross-site cookie is needed.
 
 ## PostgreSQL database
 
-Create a Supabase project and copy its PostgreSQL connection string from the project's database settings. Use a session-pooler connection if the deployment host cannot reach Supabase's direct endpoint. Set the string as the private `SUPABASE_DB_URL` environment variable; `DATABASE_URL` and `DATABASE_POSTGRES_URL` remain supported aliases. Keep the URL private; never commit it or paste it into chat. The API creates its PostgreSQL schema idempotently on first request.
+Create a Supabase project and copy its PostgreSQL connection string from the project's database settings. For serverless Vercel functions, use Supabase's transaction pooler; use its session pooler if your selected database features require a persistent session. Set the string as the private `SUPABASE_DB_URL` environment variable; `DATABASE_URL`, `DATABASE_POSTGRES_URL`, and `DATABASE_POSTGRES_PRISMA_URL` remain supported aliases. Include Supabase's recommended `sslmode=require`. Keep the URL private; never commit it or paste it into chat. The API creates its PostgreSQL schema idempotently on first request.
 
 The app needs these production environment variables in Vercel Project Settings → Environment Variables:
 
@@ -31,6 +32,10 @@ The app needs these production environment variables in Vercel Project Settings 
 - `BACKUP_ENCRYPTION_KEY`: a stable random 32-byte key encoded as 64 hex characters. Keep a separate secure copy; losing it makes encrypted Drive backups unrecoverable.
 
 Set the variables for Production (and Preview only if needed) and redeploy after changing them. Do not upload `.env`, OAuth client JSON, token files, or local database files to Vercel/GitHub.
+
+`vercel.json` uses `frontend` for static output and keeps the Node handlers in the root `api/` directory. Frontend calls use relative `/api/...` URLs, so the UI, session cookie, and handlers stay on the same deployment origin. The pharmacy pages use `pharmacy.js` for page-level role gating; the API continues to enforce authorization independently, including for admin users and backups.
+
+After setting Production variables, verify the Vercel environment-variable names in Project Settings (or `vercel env ls production`) without printing or copying values. At minimum, confirm the database URL, session secret, password pepper, SMTP settings, production `APP_BASE_URL`, cron secret, and the Drive/encryption variables if cloud backups are enabled. The `/api/health` route reports API initialization health; a missing database URL now fails before SQLite can be opened.
 
 ## Transfer existing local accounts
 

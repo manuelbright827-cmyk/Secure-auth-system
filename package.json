@@ -5,11 +5,11 @@
   "main": "backends/server.js",
   "scripts": {
     "start": "node backends/server.js",
+    "test": "node --test",
     "db:migrate-sqlite-to-postgres": "node backends/scripts/migrate-sqlite-to-postgres.js",
     "db:restore-postgres-backup": "node backends/scripts/restore-postgres-backup.js",
     "drive:configure": "node backends/scripts/configure-google-drive.js",
-    "drive:auth": "node backends/scripts/google-drive-auth.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "drive:auth": "node backends/scripts/google-drive-auth.js"
   },
   "keywords": [],
   "author": "",
