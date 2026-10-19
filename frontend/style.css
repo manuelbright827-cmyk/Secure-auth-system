@@ -1545,17 +1545,25 @@ h1 {
 
 @media (max-width: 620px) {
     .pharmacy-header {
+        flex-wrap: wrap;
         height: auto;
         min-height: 66px;
         padding: 10px 16px;
     }
 
     .pharmacy-header .header-actions {
-        gap: 7px;
+        flex: 1 1 170px;
+        min-width: 0;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 6px;
     }
 
     .pharmacy-header .account-link {
-        display: none;
+        display: inline-flex;
+        padding: 6px 8px;
+        font-size: 9px;
+        white-space: nowrap;
     }
 
     .role-badge {
