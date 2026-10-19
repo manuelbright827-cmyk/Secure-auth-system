@@ -221,8 +221,13 @@ router.get('/admin/audit-logs', requireRole('admin'), async (req, res) => {
 
 router.get('/admin/backups', requireRole('admin'), async (_req, res) => {
     if (db.dialect === 'postgres') {
-        const backups = await listDriveBackups();
-        return res.json({ storage: 'cloud', backups: backups.map((backup) => ({ name: backup.name, id: backup.id, createdAt: backup.createdTime, size: Number(backup.size) || null })) });
+        try {
+            const backups = await listDriveBackups();
+            return res.json({ storage: 'cloud', backups: backups.map((backup) => ({ name: backup.name, id: backup.id, createdAt: backup.createdTime, size: Number(backup.size) || null })) });
+        } catch (error) {
+            console.error('Cloud backup listing failed:', error.message);
+            return res.status(503).json({ message: 'Google Drive backup access failed. Reauthorize the Google Drive connection configured for this deployment.' });
+        }
     }
     const directory = path.resolve(path.join(__dirname, '..', '..'), process.env.BACKUP_DIRECTORY || 'backups');
     await fs.mkdir(directory, { recursive: true });
@@ -239,9 +244,14 @@ router.get('/admin/backups', requireRole('admin'), async (_req, res) => {
 
 router.post('/admin/backups', requireRole('admin'), async (req, res) => {
     if (db.dialect === 'postgres') {
-        const uploaded = await createPostgresBackup();
-        await audit(req, 'backup.created', { name: uploaded.name, storage: 'cloud' });
-        return res.status(201).json({ backup: uploaded.name, message: 'Encrypted cloud backup created.' });
+        try {
+            const uploaded = await createPostgresBackup();
+            await audit(req, 'backup.created', { name: uploaded.name, storage: 'cloud' });
+            return res.status(201).json({ backup: uploaded.name, message: 'Encrypted cloud backup created.' });
+        } catch (error) {
+            console.error('Cloud backup creation failed:', error.message);
+            return res.status(503).json({ message: 'Google Drive backup access failed. Reauthorize the Google Drive connection configured for this deployment.' });
+        }
     }
     const filePath = await createBackup();
     if (!filePath) return res.status(409).json({ message: 'A backup is already running.' });
