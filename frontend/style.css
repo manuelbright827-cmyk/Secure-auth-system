@@ -1882,3 +1882,51 @@ h1 {
 @media (max-width: 480px) {
     .login-card { border-radius: 15px; }
 }
+
+/* Keep the account center on the same green palette as the pharmacy workspace. */
+.dashboard-page {
+    background:
+        radial-gradient(ellipse at 92% 0%, rgba(223, 245, 238, .7), transparent 34rem),
+        #f5f7fc;
+}
+.dashboard-page .brand-mark { background: #127c68; }
+.dashboard-page .brand-light { color: #61847c; }
+.dashboard-page .welcome-avatar,
+.dashboard-page .profile-avatar { background: #e2f5ed; color: #087d70; }
+.dashboard-page .dashboard-tab:hover,
+.dashboard-page .dashboard-tab.active,
+.dashboard-page .text-action { color: #087767; }
+.dashboard-page .dashboard-tab.active::after { background: linear-gradient(90deg, #19a88c, #087365); }
+.dashboard-page .panel {
+    border-color: #e2ebe8;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(29, 55, 68, .045), 0 2px 5px rgba(29, 55, 68, .02);
+}
+.dashboard-page .identity-icon,
+.dashboard-page .security-icon,
+.dashboard-page .settings-icon,
+.dashboard-page .admin-icon { background: #e8f7f0; color: #11816d; }
+.dashboard-page .profile-summary { background: #f3faf6; }
+.dashboard-page .privacy-note {
+    border-color: #dcece5;
+    background: linear-gradient(115deg, #eff9f4, #f8fcfa);
+    color: #687f79;
+}
+.dashboard-page .privacy-note strong,
+.dashboard-page .privacy-icon { color: #087767; }
+.dashboard-page .bootstrap-admin-panel {
+    border-color: #dcece5;
+    background: #f4faf7;
+}
+.dashboard-page .admin-form {
+    border-color: #e2ebe8;
+    background: #f8fbf9;
+}
+.dashboard-page .admin-primary-button {
+    border-radius: 9px;
+    background: linear-gradient(135deg, #15977e, #087565);
+    box-shadow: 0 5px 12px rgba(10, 119, 99, .16);
+}
+.dashboard-page .admin-primary-button:hover { background: linear-gradient(135deg, #108a74, #066958); }
+.dashboard-page .logout-button:hover,
+.dashboard-page .subtle-button:hover { border-color: #b9e2d2; background: #f5fbf8; }
