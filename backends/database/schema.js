@@ -42,6 +42,10 @@ const sqliteSchema = [
         hits INTEGER NOT NULL,
         reset_at INTEGER NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS two_factor_last_counters (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        counter BIGINT NOT NULL
+    )`,
     'CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)',
     'CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)',
     'CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_user_id ON password_setup_tokens(user_id)',
@@ -87,6 +91,10 @@ const postgresSchema = [
         key TEXT PRIMARY KEY,
         hits INTEGER NOT NULL,
         reset_at BIGINT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS two_factor_last_counters (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        counter BIGINT NOT NULL
     )`,
     `CREATE TABLE IF NOT EXISTS user_sessions (
         sid VARCHAR NOT NULL PRIMARY KEY,

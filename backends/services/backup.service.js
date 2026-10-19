@@ -14,7 +14,7 @@ const backupIntervalMs = (Number.isFinite(intervalHours) && intervalHours > 0 ? 
 const backupRetentionMs = (Number.isFinite(retentionDays) && retentionDays > 0 ? retentionDays : 14) * 24 * 60 * 60 * 1000;
 const backupPrefix = 'auth-db-';
 const postgresBackupTables = [
-    'users', 'audit_logs', 'password_setup_tokens', 'password_reset_codes', 'rate_limit_counters',
+    'users', 'audit_logs', 'password_setup_tokens', 'password_reset_codes', 'rate_limit_counters', 'two_factor_last_counters',
     'deleted_users', 'medicines', 'inventory', 'customers', 'prescriptions', 'prescription_items', 'sales', 'sale_items'
 ];
 

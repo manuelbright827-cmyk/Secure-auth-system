@@ -16,10 +16,20 @@ const {
     createAuthenticatorSecret,
     encryptSecret,
     decryptSecret,
-    verifyAuthenticatorCode
+    verifyAuthenticatorCode,
+    getAuthenticatorCounter
 } = require('../services/two-factor.service');
 
 const router = express.Router();
+async function claimAuthenticatorCounter(userId, counter) {
+    const result = await db.query(`
+        INSERT INTO two_factor_last_counters (user_id, counter) VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET counter = excluded.counter
+        WHERE two_factor_last_counters.counter < excluded.counter
+    `, [userId, counter]);
+    return result.rowCount === 1;
+}
+
 const rateLimitHandler = (req, res) => res.status(429).json({
     message: 'Too many requests. Please wait before trying again.'
 });
@@ -221,10 +231,15 @@ router.post('/2fa/verify-setup', verificationLimiter, async (req, res) => {
         return res.status(400).json({ message: 'Enter the 6-digit code from your authenticator app' });
     }
 
-    if (!(await verifyAuthenticatorCode(secret, code))) {
+    const totpTimestamp = Date.now();
+    if (!(await verifyAuthenticatorCode(secret, code, totpTimestamp))) {
         await db.query(`INSERT INTO audit_logs (user_id, action, ip_address, user_agent, actor_role, resource, result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [user.id, 'two_factor.setup_failed', req.ip || null, req.get('user-agent') || null, user.role, null, 'failure']);
         return res.status(401).json({ message: 'Code did not match. Check your authenticator app and try again.' });
+    }
+
+    if (!(await claimAuthenticatorCounter(user.id, getAuthenticatorCounter(totpTimestamp)))) {
+        return res.status(401).json({ message: 'This authenticator code was already used. Wait for the next code and try again.' });
     }
 
     const result = await db.query(`
@@ -268,10 +283,17 @@ router.post('/2fa/verify', verificationLimiter, async (req, res) => {
         return res.status(500).json({ message: 'Authenticator configuration could not be read' });
     }
 
-    if (!(await verifyAuthenticatorCode(secret, code))) {
+    const totpTimestamp = Date.now();
+    if (!(await verifyAuthenticatorCode(secret, code, totpTimestamp))) {
         await db.query(`INSERT INTO audit_logs (user_id, action, ip_address, user_agent, actor_role, resource, result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [user.id, 'two_factor.verification_failed', req.ip || null, req.get('user-agent') || null, user.role, null, 'failure']);
         return res.status(401).json({ message: 'Invalid code. Check your authenticator app and try again.' });
+    }
+
+    if (!(await claimAuthenticatorCounter(user.id, getAuthenticatorCounter(totpTimestamp)))) {
+        await db.query(`INSERT INTO audit_logs (user_id, action, ip_address, user_agent, actor_role, resource, result) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [user.id, 'two_factor.replay_rejected', req.ip || null, req.get('user-agent') || null, user.role, null, 'failure']);
+        return res.status(401).json({ message: 'This authenticator code was already used. Wait for the next code and try again.' });
     }
 
     completeSignIn(req, user);

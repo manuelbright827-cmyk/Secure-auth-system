@@ -12,6 +12,7 @@ const tableColumns = {
     password_setup_tokens: ['token_hash', 'user_id', 'expires_at', 'used_at', 'created_at'],
     password_reset_codes: ['code_hash', 'user_id', 'expires_at', 'used_at', 'created_at'],
     rate_limit_counters: ['key', 'hits', 'reset_at'],
+    two_factor_last_counters: ['user_id', 'counter'],
     deleted_users: ['id', 'original_user_id', 'email', 'role', 'deleted_by', 'deleted_at'],
     medicines: ['id', 'name', 'sku', 'category', 'description', 'unit_price', 'reorder_level', 'is_active', 'created_by', 'updated_by', 'created_at', 'updated_at'],
     inventory: ['medicine_id', 'quantity', 'updated_at'],

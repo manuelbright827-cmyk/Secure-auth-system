@@ -94,8 +94,12 @@ function decryptSecret(encryptedSecret) {
     ]).toString('utf8');
 }
 
+function getAuthenticatorCounter(timestamp = Date.now()) {
+    return Math.floor(timestamp / 1000 / 30);
+}
+
 function generateTotp(secret, timestamp = Date.now()) {
-    const counter = Math.floor(timestamp / 1000 / 30);
+    const counter = getAuthenticatorCounter(timestamp);
     const key = base32Decode(secret);
     const buffer = Buffer.alloc(8);
     let value = BigInt(counter);
@@ -115,7 +119,7 @@ function generateTotp(secret, timestamp = Date.now()) {
     return String(binary % 1000000).padStart(6, '0');
 }
 
-async function verifyAuthenticatorCode(secret, code) {
+async function verifyAuthenticatorCode(secret, code, timestamp = Date.now()) {
     if (typeof secret !== 'string' || typeof code !== 'string') {
         return false;
     }
@@ -125,22 +129,15 @@ async function verifyAuthenticatorCode(secret, code) {
         return false;
     }
 
-    const now = Date.now();
-    const currentWindow = Math.floor(now / 1000 / 30);
-
-    for (let offset = -1; offset <= 1; offset += 1) {
-        const candidate = generateTotp(secret, (currentWindow + offset) * 30 * 1000);
-        if (candidate === normalizedCode) {
-            return true;
-        }
-    }
-
-    return false;
+    // Accept only the current 30-second period. A previous-period code remains
+    // valid for nearly 30 seconds otherwise, which makes expired codes reusable.
+    return generateTotp(secret, timestamp) === normalizedCode;
 }
 
 module.exports = {
     createAuthenticatorSecret,
     encryptSecret,
     decryptSecret,
-    verifyAuthenticatorCode
+    verifyAuthenticatorCode,
+    getAuthenticatorCounter
 };
