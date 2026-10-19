@@ -1816,8 +1816,8 @@ h1 {
 .login-container {
     background:
         radial-gradient(ellipse 42rem 32rem at 0% 2%, rgba(177, 231, 208, .42), transparent 72%),
-        radial-gradient(ellipse 38rem 30rem at 100% 24%, rgba(211, 225, 255, .52), transparent 72%),
-        linear-gradient(145deg, #f5faf7 0%, #f4f7fb 48%, #f9f8f3 100%);
+        radial-gradient(ellipse 38rem 30rem at 100% 24%, rgba(202, 235, 219, .48), transparent 72%),
+        linear-gradient(145deg, #f5faf7 0%, #f1f8f4 48%, #f8faf7 100%);
     background-attachment: fixed;
 }
 
