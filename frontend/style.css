@@ -1770,19 +1770,115 @@ h1 {
 .stock-badge, .state-badge { padding: 6px 9px; }
 .pharmacy-footer { color: #899b9d; }
 
+.workspace-guide {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 22px;
+    margin: 16px 0;
+    padding: 21px 24px;
+    border: 1px solid #dcece6;
+    border-radius: 15px;
+    background: linear-gradient(112deg, rgba(239, 251, 245, .96), rgba(255, 255, 255, .92) 70%, rgba(241, 248, 252, .95));
+    box-shadow: 0 8px 22px rgba(31, 73, 66, .045);
+}
+.workspace-guide .eyebrow { margin-bottom: 7px; color: #128171; font-size: 9px; letter-spacing: 1.35px; }
+.workspace-guide h2 { margin: 0 0 6px; color: #193b3e; font-size: 17px; letter-spacing: -.25px; }
+.workspace-guide p:last-child { max-width: 680px; margin: 0; color: #6d8283; font-size: 12px; line-height: 1.65; }
+.guide-action { flex: 0 0 auto; padding: 10px 14px; border: 1px solid #cfe7dd; border-radius: 9px; background: #fff; color: #087767; font-size: 11px; font-weight: 700; text-decoration: none; transition: background .15s, border-color .15s, transform .15s; }
+.guide-action:hover, .guide-action:focus-visible { border-color: #a9d9c7; background: #f5fbf8; transform: translateY(-1px); outline: none; }
+.prescription-entry-form { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; margin-bottom: 24px; }
+.prescription-entry-form .primary-action { min-height: 43px; }
+.pharmacy-form[hidden] { display: none !important; }
+
 @media (max-width: 720px) {
     .pharmacy-header { padding-inline: 18px; }
     .pharmacy-main { width: min(100% - 30px, 620px); padding-top: 23px; }
     .pharmacy-intro { min-height: 144px; padding: 24px 22px; border-radius: 18px; }
     .pharmacy-nav { border-radius: 12px; }
+    .workspace-guide { align-items: flex-start; flex-direction: column; padding: 19px; }
+    .guide-action { align-self: flex-start; }
+    .prescription-entry-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
     .pharmacy-intro::before { right: -65px; }
     .pharmacy-intro::after { right: 110px; }
     .pharmacy-header .header-actions { gap: 6px; }
     .role-badge { letter-spacing: 0; }
+    .prescription-entry-form { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .pharmacy-nav a, .report-card, .dashboard-links a { transition: none; }
-    .report-card:hover, .dashboard-links a:hover { transform: none; }
+    .pharmacy-nav a, .report-card, .dashboard-links a, .guide-action { transition: none; }
+    .report-card:hover, .dashboard-links a:hover, .guide-action:hover { transform: none; }
+}
+
+/* Match sign-in and account recovery screens to the pharmacy workspace palette. */
+.login-container {
+    background:
+        radial-gradient(ellipse 42rem 32rem at 0% 2%, rgba(177, 231, 208, .42), transparent 72%),
+        radial-gradient(ellipse 38rem 30rem at 100% 24%, rgba(211, 225, 255, .52), transparent 72%),
+        linear-gradient(145deg, #f5faf7 0%, #f4f7fb 48%, #f9f8f3 100%);
+    background-attachment: fixed;
+}
+
+.login-card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #e3ece9;
+    border-radius: 18px;
+    box-shadow: 0 24px 65px rgba(24, 66, 62, .12), 0 3px 10px rgba(31, 48, 75, .04);
+    color: #19363c;
+}
+
+.login-card::before {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 5px;
+    background: linear-gradient(90deg, #19a88c, #087365 55%, #b2ddce);
+    content: '';
+}
+
+.login-card h1 { color: #19363c; }
+.login-card .subtitle { color: #71878a; }
+.login-card .logo {
+    border: 1px solid #d5eee4;
+    background: linear-gradient(145deg, #effbf5, #e2f5ed);
+    color: #087d70;
+}
+.login-card .form-group label { color: #395458; }
+.login-card .form-group input {
+    border-color: #dce7e3;
+    border-radius: 9px;
+    background: #fff;
+    color: #19363c;
+}
+.login-card .form-group input:focus {
+    border-color: #46a990;
+    box-shadow: 0 0 0 3px rgba(24, 154, 124, .13);
+}
+.login-card .toggle-password,
+.login-card .form-options a,
+.login-card .back-link a { color: #087767; }
+.login-card .login-button {
+    border-radius: 9px;
+    background: linear-gradient(135deg, #15977e, #087565);
+    box-shadow: 0 5px 12px rgba(10, 119, 99, .16);
+}
+.login-card .login-button:hover { background: linear-gradient(135deg, #108a74, #066958); }
+.login-card .secondary-button {
+    border-color: #cfe8dd;
+    color: #087767;
+}
+.login-card .authenticator-key {
+    border-color: #dcefe8;
+    background: linear-gradient(135deg, #fbfdfc, #f4faf7);
+}
+.login-card .security-notice {
+    border-top-color: #e5eeeb;
+    background: linear-gradient(135deg, rgba(245, 250, 248, .85), rgba(255, 255, 255, .5));
+}
+.login-card .security-notice p { color: #71878a; }
+
+@media (max-width: 480px) {
+    .login-card { border-radius: 15px; }
 }

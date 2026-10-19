@@ -26,10 +26,74 @@ function button(text, handler, danger = false) { const el = document.createEleme
 async function request(path, options = {}) { const res = await fetch(api(path), { credentials: 'include', ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) } }); const data = await res.json().catch(() => ({})); if (res.status === 401) { location.replace('index.html'); throw new Error('Please sign in again.'); } if (!res.ok) throw new Error(data.message || 'Request failed.'); return data; }
 const values = (form) => Object.fromEntries(new FormData(form).entries());
 
+const pageGuides = {
+  'overview.html': { eyebrow: 'GETTING STARTED', title: 'A clear view of daily work', body: 'The summary cards use live pharmacy records. Start with the catalogue, then stock, prescriptions and sales activity will appear here.', candidates: [['medicines.html', 'Open medicines'], ['sales.html', 'Open sales']] },
+  'medicines.html': { eyebrow: 'CATALOGUE TIPS', title: 'Add medicines as they arrive', body: 'Give each item a unique SKU, enter its selling price and opening quantity, and set a reorder level to make low stock easier to spot.', action: ['#medicineForm', 'Add a medicine'] },
+  'inventory.html': { eyebrow: 'STOCK CONTROL', title: 'Keep quantities up to date', body: 'Use Adjust stock on a medicine row after a count. Items at or below their reorder level are marked for review.', action: ['medicines.html', 'Open catalogue'] },
+  'prescriptions.html': { eyebrow: 'DISPENSING WORKFLOW', title: 'Record, review and dispense', body: 'Create a prescription below. It will appear in the queue, where a pharmacist can dispense it after checking available stock.', action: ['#prescriptionForm', 'Create a prescription'] },
+  'sales.html': { eyebrow: 'POINT OF SALE', title: 'Sales use current stock and prices', body: 'Cashiers and administrators can complete a sale. Managers can review transactions. Saved sales update inventory using the current price and available stock.', action: ['#saleForm', 'Start a sale'], actionForRole: { manager: ['#salesList', 'Review recent sales'] } },
+  'reports.html': { eyebrow: 'LIVE REPORTING', title: 'Real activity, no sample figures', body: 'Report totals update from saved sales, stock and prescription records. A zero means no activity has been recorded for that measure yet.', action: ['inventory.html', 'Review inventory'] },
+  'users.html': { eyebrow: 'STAFF ACCESS', title: 'Give each person the right role', body: 'Create staff accounts with a temporary password. New staff are prompted to configure two-factor authentication at first sign-in.', action: ['#userForm', 'Create staff account'] },
+  'backup.html': { eyebrow: 'RECOVERY', title: 'Create an encrypted cloud snapshot', body: 'Production backups are encrypted before they are uploaded to Google Drive. PostgreSQL restores use the guarded restore command and a new empty database.', action: ['#createBackup', 'View backup controls'] }
+};
+
+function addPageGuide(allowed) {
+  const guide = pageGuides[page];
+  const anchor = document.querySelector('.pharmacy-panel');
+  if (!guide || !anchor || document.querySelector('.workspace-guide')) return;
+  const section = document.createElement('section');
+  section.className = 'workspace-guide';
+  const content = document.createElement('div');
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = guide.eyebrow;
+  const title = document.createElement('h2');
+  title.textContent = guide.title;
+  const body = document.createElement('p');
+  body.textContent = guide.body;
+  content.append(eyebrow, title, body);
+  section.append(content);
+  let action = guide.actionForRole?.[user?.role] || guide.action;
+  if (guide.candidates) action = guide.candidates.find(([href]) => allowed.includes(href));
+  if (action) {
+    const link = document.createElement('a');
+    link.href = action[0];
+    link.className = 'guide-action';
+    link.textContent = action[1];
+    section.append(link);
+  }
+  anchor.before(section);
+}
+
+function addPrescriptionForm() {
+  const list = $('prescriptionList');
+  const table = list?.closest('.table-wrap');
+  if (!table || $('prescriptionForm')) return;
+  const form = document.createElement('form');
+  form.id = 'prescriptionForm';
+  form.className = 'pharmacy-form prescription-entry-form';
+  form.innerHTML = '<label>Reference<input name="reference" placeholder="Optional prescription reference"></label><label>Prescriber<input name="prescriber" placeholder="Optional prescriber name"></label><label>Medicine<select id="prescriptionMedicine" required><option value="">Choose a medicine</option></select></label><label>Quantity<input name="quantity" type="number" min="1" step="1" value="1" required></label><button class="primary-action" type="submit">Add to queue</button>';
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      await request('/prescriptions', { method: 'POST', body: JSON.stringify({
+        reference: form.elements.reference.value.trim() || null,
+        prescriber: form.elements.prescriber.value.trim() || null,
+        items: [{ medicineId: Number($('prescriptionMedicine').value), quantity: Number(form.elements.quantity.value) }]
+      }) });
+      form.reset();
+      await loadPrescriptions();
+      status('Prescription added to the dispensing queue.', 'success');
+    } catch (error) { status(error.message, 'error'); }
+  });
+  table.before(form);
+}
+
 async function loadMedicines() {
   const data = await request('/medicines'); medicines = data.medicines || [];
   const list = $('medicineList'); if (list) list.replaceChildren();
   const select = $('saleMedicine'); if (select) { select.replaceChildren(new Option(medicines.length ? 'Choose a medicine' : 'No medicines available', '')); }
+  const prescriptionSelect = $('prescriptionMedicine'); if (prescriptionSelect) prescriptionSelect.replaceChildren(new Option(medicines.length ? 'Choose a medicine' : 'No medicines available', ''));
   for (const m of medicines) {
     const stock = Number(m.stock) || 0; const low = stock <= (Number(m.reorder_level) || 0);
     const state = badge(low ? 'Reorder' : 'In stock', `stock-badge${low ? ' is-low' : ''}`);
@@ -40,6 +104,7 @@ async function loadMedicines() {
       row(list, cells);
     }
     if (select) { const option = new Option(`${m.name} · ${stock} available`, m.id); option.disabled = stock < 1; select.append(option); }
+    if (prescriptionSelect) { const option = new Option(`${m.name} · ${stock} available`, m.id); option.disabled = stock < 1; prescriptionSelect.append(option); }
   }
   if (list && !medicines.length) empty(list, 6, 'No medicines have been added yet.');
 }
@@ -61,8 +126,14 @@ async function init() {
     document.querySelectorAll('[data-admin]').forEach(el => { el.hidden = !adminRoles.includes(role); });
     document.querySelectorAll('[data-link]').forEach(el => { const target = el.dataset.link; const roles = Object.keys(permissions).filter(r => permissions[r].includes(target)); el.hidden = !roles.includes(role); if (target === page) el.setAttribute('aria-current', 'page'); });
     if (page === 'pharmacy.html') document.querySelectorAll('.dashboard-links a[data-link]').forEach(el => { const target = el.dataset.link; el.hidden = !allowed.includes(target); });
+    if (page === 'pharmacy.html') document.querySelectorAll('.dashboard-links a[data-page-role]').forEach(el => { const target = `${el.dataset.pageRole}.html`; el.hidden = !allowed.includes(target); });
+    if (page === 'prescriptions.html') addPrescriptionForm();
+    if (page === 'sales.html' && !['cashier', ...adminRoles].includes(role)) {
+      const form = $('saleForm'); if (form) { form.hidden = true; const note = document.createElement('p'); note.className = 'helper-copy'; note.textContent = 'Sales are read-only for your role. A cashier or administrator can record transactions.'; form.after(note); }
+    }
+    addPageGuide(allowed);
     if (new URLSearchParams(location.search).has('denied')) status('That section is not available for your role.');
-    if (['medicines.html','inventory.html','sales.html','overview.html','reports.html'].includes(page)) await loadMedicines();
+    if (['medicines.html','inventory.html','sales.html','overview.html','reports.html','prescriptions.html'].includes(page)) await loadMedicines();
     if (page === 'medicines.html' || page === 'inventory.html') { /* table loaded above */ }
     if (page === 'sales.html') await loadSales();
     if (page === 'prescriptions.html') await loadPrescriptions();
